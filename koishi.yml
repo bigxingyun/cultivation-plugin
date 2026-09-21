@@ -1,0 +1,16 @@
+prefix:
+  - .
+  - /
+plugins:
+  proxy-agent:iksjen: {}
+  http:uv5p14: {}
+  server:mwxif8:
+    port: 5140
+  logger:syo61k:
+    level: 2
+  database-sqlite:n3zrwo:
+    path: data/koishi.db
+  console:zin3jk: {}
+  sandbox:nrz06r: {}
+  demo:u7g9gm: {}
+  xianxia-idle:643rqf: {}

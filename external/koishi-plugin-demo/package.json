@@ -1,0 +1,34 @@
+{
+  "name": "koishi-plugin-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "链路连通性测试插件：验证 Koishi 消息 → 指令 → 数据库 → 回复 全链路",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin"
+  ],
+  "peerDependencies": {
+    "koishi": "^4.18.11"
+  },
+  "koishi": {
+    "description": {
+      "zh": "链路连通性测试插件：验证 消息 → 指令 → 数据库 → 回复 全链路是否打通"
+    },
+    "service": {
+      "required": [
+        "database"
+      ]
+    }
+  }
+}

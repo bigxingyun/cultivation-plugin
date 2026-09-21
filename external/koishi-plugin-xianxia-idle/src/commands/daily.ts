@@ -1,0 +1,233 @@
+/** C 每日循环（M3）+ F3 待办
+ *  规格见《游戏结构与命令设计.md》§4.5 C1–C5 / F3
+ */
+
+import type { Context } from 'koishi'
+import { $ } from 'koishi'
+import type { Game, XUser } from '../game'
+import { T_USER } from '../game'
+import * as C from '../core/curves'
+import * as D from '../data'
+import { amount, num } from '../core/fmt'
+import type { Grade, Realm } from '../types'
+import { CLASS_NAMES } from '../types'
+import { shell } from './helpers'
+
+/** 出题档位：按大境界分 5 档（§9.3 只出玩家经历过的内容） */
+export function quizBand (rank: number): 1 | 2 | 3 | 4 | 5 {
+  const r = C.realmOf(rank)
+  if (r <= 1) return 1
+  if (r === 2) return 2
+  if (r <= 4) return 3
+  if (r <= 6) return 4
+  return 5
+}
+
+/** 按日期确定性抽取（**绝不用 Math.random()**，否则刷新换题） */
+function pickByDate<T> (arr: T[], seed: string): T {
+  let h = 2166136261
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return arr[Math.abs(h) % arr.length]
+}
+
+function yesterday (): string {
+  return C.today(new Date(Date.now() - 86400000))
+}
+
+export function registerDaily (ctx: Context, game: Game) {
+  const { database } = ctx
+
+  // ── C1 签到 ─────────────────────────────────────────────────────────
+  ctx.command('签到', '每日签到（连签 7 天为一轮，断签回退 2 格）')
+    .alias('打卡')
+    .action(shell(game, async (user, g) => {
+      const day = C.today()
+      if (user.lastCheckinDate === day) {
+        return `【今天已经签过了】连签 ${user.checkinStreak} 天`
+      }
+      let streak: number
+      if (user.lastCheckinDate === yesterday()) {
+        streak = (user.checkinStreak % 7) + 1
+      } else {
+        streak = Math.max(1, user.checkinStreak - 1) // 回退 2 格后再算今天 +1
+      }
+      await g.save(user.userId, { checkinStreak: streak, lastCheckinDate: day })
+      user.checkinStreak = streak
+      user.lastCheckinDate = day
+      const reward = C.CHECKIN_TABLE[streak - 1]
+      const lines = [`【签到 · 第 ${streak} 天（连签）】`]
+      const exp = reward.pct ? C.EP(user.rank) * reward.pct : 0
+      if (exp) {
+        await database.set(T_USER, { userId: user.userId }, (row: any) => ({ exp: $.add(row.exp, exp) }) as any)
+        lines.push(`修为　+${amount(exp)}`)
+      }
+      const pg = C.pillGradeOfRealm(C.realmOf(user.rank))
+      if (reward.kind === 'pill') {
+        const pool = D.PILLS.filter((p) => p.grade === pg && p.cls === 'B')
+        const pill = g.pick(pool)
+        if (pill) { await g.addItem(user.userId, pill.id, 1); lines.push(`丹药　+${pill.name} ×1`) }
+      }
+      if (reward.kind === 'quota') {
+        await g.save(user.userId, { quotaBonus: user.quotaBonus + 1 })
+        lines.push('历练次数　+1　当日')
+      }
+      if (reward.kind === 'dao') {
+        const pool = D.PILLS.filter((p) => p.grade === pg && p.cls === 'D')
+        const pill = g.pick(pool)
+        if (pill) { await g.addItem(user.userId, pill.id, 1); lines.push(`丹药　+${pill.name} ×1`) }
+      }
+      if (reward.kind === 'break') {
+        const pool = D.PILLS.filter((p) => p.grade === pg && p.cls === 'C')
+        const pill = g.pick(pool)
+        if (pill) { await g.addItem(user.userId, pill.id, 1); lines.push(`丹药　+${pill.name} ×1`) }
+      }
+      if (streak < 7) lines.push(`明日　第 ${streak + 1} 天　${C.CHECKIN_TABLE[streak].text}`)
+      else lines.push('明日　回到第 1 天')
+      lines.push(`已连签 ${streak} 天 ${'█'.repeat(streak)}${'░'.repeat(7 - streak)}`)
+      return lines
+    }))
+
+  // ── C2 抽签 ─────────────────────────────────────────────────────────
+  ctx.command('抽签', '每日一签（凶也有故事）')
+    .alias('求签')
+    .action(shell(game, async (user, g) => {
+      const day = C.today()
+      if (user.drawDate === day) return '【今天已经抽过了】'
+      await g.save(user.userId, { drawDate: day })
+      const entry = g.pickWeighted(C.DRAW_TABLE.map((d) => [d, d.weight] as [typeof d, number]))!
+      const lines = [`【抽签 · ${entry.sign}】`]
+      if (entry.sign === '大吉' || entry.sign === '吉') {
+        const mul = entry.sign === '大吉' ? 1.5 : 1.25
+        await g.addBuff(user.userId, 'speed', mul, 3600)
+        lines.push(`增速　×${mul.toFixed(2)}　1 小时`)
+      } else if (entry.sign === '小吉') {
+        await g.setFlag(user.userId, 'F-CE1', 1)
+        lines.push('护道　今日首次历练必成功')
+      } else if (entry.sign === '平') {
+        const exp = C.EP(user.rank) * 0.2
+        await database.set(T_USER, { userId: user.userId }, (row: any) => ({ exp: $.add(row.exp, exp) }) as any)
+        lines.push(`修为　+${amount(exp)}`)
+      } else {
+        await database.set(T_USER, { userId: user.userId }, (row: any) => ({ fragments: $.add(row.fragments, 1) }) as any)
+        await g.setFlag(user.userId, 'F-FRAG-DAY', 1)
+        const pool = D.badlotsOfRealm(C.realmOf(user.rank) as Realm)
+        const bad = g.pick(pool)
+        lines.push('故事碎片　+1')
+        if (bad) {
+          lines.push(`签文　${bad.sign}`)
+          lines.push(bad.fragment)
+        }
+      }
+      return lines
+    }))
+
+  // ── C3 答题 ─────────────────────────────────────────────────────────
+  ctx.command('答题 [选项]', '每日问答：答对给奖励，答错不罚')
+    .alias('问答')
+    .action(shell(game, async (user, g, argv, args) => {
+      const day = C.today()
+      const band = quizBand(user.rank)
+      const pool = D.quizOfBand(band)
+      if (!pool.length) return '【题库为空】'
+      const q = pickByDate(pool, `${day}|${user.userId}`)
+      const pick = String(args[0] ?? '').toUpperCase().replace(/[^ABC]/g, '')
+      if (!pick) {
+        if (user.quizDate === day && user.quizAnswered) {
+          return [`【今天已经答过了】正确答案 ${'ABC'[q.answer]}`, q.explain].join('\n')
+        }
+        return [
+          `【每日问答 · ${q.id}】`,
+          q.q,
+          ...q.options.map((o, i) => `　${'ABC'[i]}. ${o}`),
+          '发「答题 A」「答题 B」「答题 C」',
+        ].join('\n')
+      }
+      if (user.quizDate === day && user.quizAnswered) {
+        return '【今天已经答过了】'
+      }
+      const idx = 'ABC'.indexOf(pick)
+      const correct = idx === q.answer
+      await g.save(user.userId, { quizDate: day, quizAnswered: pick })
+      const lines = [`【答题 · ${correct ? '✔ 正确' : '✘ 不对'}】`]
+      lines.push(`正确答案　${'ABC'[q.answer]}. ${q.options[q.answer]}`)
+      lines.push(q.explain)
+      if (q.source) lines.push(`出处　${q.source}`)
+      if (correct) {
+        const exp = C.EP(user.rank) * 0.15
+        await database.set(T_USER, { userId: user.userId }, (row: any) => ({ exp: $.add(row.exp, exp) }) as any)
+        lines.push(`修为　+${amount(exp)}`)
+        const pg = C.pillGradeOfRealm(C.realmOf(user.rank))
+        const pillPool = D.PILLS.filter((p) => p.grade === pg)
+        const pill = g.pick(pillPool)
+        if (pill) { await g.addItem(user.userId, pill.id, 1); lines.push(`丹药　+${pill.name} ×1`) }
+      }
+      return lines
+    }))
+
+  // ── C4 奇遇 ─────────────────────────────────────────────────────────
+  ctx.command('奇遇 [选择]', '被动事件：二选一')
+    .alias('抉择')
+    .action(shell(game, async (user, g, argv, args) => {
+      const id = user.pendingEventId
+      if (!id) return '【暂时没有奇遇】'
+      const ev = D.EVENT_BY_ID.get(id)
+      if (!ev) { await g.save(user.userId, { pendingEventId: '' }); return '【这条奇遇的数据丢了】' }
+      const pickRaw = String(args[0] ?? '')
+      if (!pickRaw) {
+        return [
+          `【奇遇 · ${ev.title}】`,
+          ev.body,
+          ...ev.options.map((o, i) => `${i + 1}. ${o.label}：${o.text}　${o.kind === 'res' ? '即时资源' : '稳定进度'}`),
+          '发「奇遇 1」或「奇遇 2」',
+        ].join('\n')
+      }
+      const idx = Number(pickRaw) - 1
+      if (idx !== 0 && idx !== 1) return '【选项不对】发「奇遇 1」或「奇遇 2」'
+      const gained = await g.applyEventOption(user, ev, idx)
+      return [
+        `【奇遇 · ${ev.title}】选择「${ev.options[idx].label}」`,
+        ev.options[idx].text,
+        ...gained.map((x) => `+${x}`),
+      ].join('\n')
+    }))
+
+  // ── C5 天机推演 ─────────────────────────────────────────────────────
+  ctx.command('天机', '消耗 3 枚故事碎片，换一条提示')
+    .alias('推演')
+    .action(shell(game, async (user, g) => {
+      if (user.fragments < C.INSIGHT_FRAG_COST) {
+        return `【碎片不足】需要 ${C.INSIGHT_FRAG_COST} 枚　现有 ${user.fragments} 枚`
+      }
+      await database.set(T_USER, { userId: user.userId }, (row: any) => ({ fragments: $.add(row.fragments, -C.INSIGHT_FRAG_COST) }) as any)
+      const realm = C.realmOf(user.rank) as Realm
+      const locked = D.CHAINS.filter((c) => c.realm >= realm && !(c.unlock.rankMin <= user.rank))
+      const pool = D.badlotsOfRealm(realm)
+      const bad = g.pick(pool)
+      const lines = [`【天机推演 · 碎片 -${C.INSIGHT_FRAG_COST}　剩 ${user.fragments - C.INSIGHT_FRAG_COST}】`]
+      if (locked.length && Math.random() < 0.5) {
+        const chain = g.pick(locked)!
+        lines.push(`『${chain.blurb}』`)
+        lines.push(`《${chain.name}》　未解锁 · rank ≥ ${chain.unlock.rankMin}`)
+      } else if (bad) {
+        lines.push(`签文　${bad.sign}`)
+        lines.push(bad.fragment)
+      } else {
+        lines.push('（无）')
+      }
+      return lines
+    }))
+
+  // ── F3 待办 ─────────────────────────────────────────────────────────
+  ctx.command('待办', '看看现在有什么该做')
+    .alias('提示')
+    .action(shell(game, async (user, g) => {
+      const list = await g.todos(user)
+      if (!list.length) return '【暂无待办】'
+      return ['【待办】', ...list.map((x, i) => `${i + 1}. ${x}`)].join('\n')
+    }, { todo: false }))
+}
+
+export type { Grade, XUser, CLASS_NAMES }
