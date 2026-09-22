@@ -1,16 +1,20 @@
-/** 指令公共外壳：建档 → 惰性结算 → 执行 → 附待办摘要
+/** 指令公共外壳：建档 → 惰性结算 → 执行 → 附待办摘要 → 渲染
  *
- *  《游戏结构与命令设计.md》§4.4/§4.6 的落地：
+ *  《游戏结构与命令设计.md》§4.4/§4.4.2/§4.6 的落地：
  *   - 每次交互先跑 settleAll（闭关修为 / 历练队列 / 链节点 / 每日重置）
  *   - 闭关态只读（写操作要求先出关）
  *   - 回复末尾附一行待办摘要 = 零主动推送的实现
+ *   - **出口只有一条**：指令交出 Body，由 core/render.ts 决定落成纯文本还是 Markdown
  */
 
+import { h } from 'koishi'
 import type { Game, XUser } from '../game'
 import type { EffectCode } from '../types'
 import { pct } from '../core/fmt'
+import type { Body, Line } from '../core/render'
+import { pickRender, renderMarkdown, renderText, T } from '../core/render'
 
-export type Body = string | string[]
+export type { Body }
 
 /** shell 传给指令实现的环境（含本次惰性结算的结果） */
 export interface Settled {
@@ -19,20 +23,27 @@ export interface Settled {
   chains: unknown[]
 }
 
-export function toLines (body: Body): string[] {
-  // 只丢 null/undefined——空字符串是**故意的段落空行**（开场白、介绍），不能吞
-  return Array.isArray(body) ? body.filter((x) => x != null) : [body]
-}
-
 /** 闭关态门禁：返回提示，或 null 表示放行 */
-export function closedMsg (user: XUser): string | null {
+export function closedMsg (user: XUser): Line | null {
   if (!user.seclusionStart) return null
-  return '【闭关中】发「出关」后可操作'
+  return T.title('闭关中', '发「出关」后可操作')
 }
 
 export interface ShellOpts {
   /** 是否附加待办摘要（默认附加） */
   todo?: boolean
+}
+
+/** 唯一的出口：把 Body 按当前平台渲染成一条回复。
+ *  `shell` 用它，不走 shell 的指令（如 `修仙管理`）也必须用它——否则那一条会在
+ *  QQ 官方机器人上掉回纯文本，同一台机器人出现两种排版。 */
+export function emit (game: Game, argv: any, body: Body): any {
+  const lines = Array.isArray(body) ? body : [body]
+  if (pickRender(game.renderConfig, argv?.session?.platform) === 'markdown') {
+    // QQ 官方机器人：同一个盒子，内容是 Markdown
+    return h('qq:markdown', {}, renderMarkdown(lines as any))
+  }
+  return renderText(lines as any)
 }
 
 /** 指令外壳。fn 收到的是**已结算过**的用户行。 */
@@ -41,7 +52,7 @@ export function shell (
   fn: (user: XUser, g: Game, argv: any, args: any[], settled: Settled) => Promise<Body>,
   opts: ShellOpts = {},
 ) {
-  return async (argv: any, ...args: any[]): Promise<string> => {
+  return async (argv: any, ...args: any[]): Promise<any> => {
     const session = argv.session
     const userId: string | undefined = session?.userId
     if (!userId) return '拿不到你的用户 ID，先随便发一条消息再试。'
@@ -49,18 +60,19 @@ export function shell (
     const settled = await game.settleAll(user)
     user = settled.user
 
-    const lines = toLines(await fn(user, game, argv, args, settled))
+    // 只丢 null / undefined / false——空字符串是**故意的段落空行**，不能吞
+    const body: Body = await fn(user, game, argv, args, settled)
+    const lines = Array.isArray(body) ? body.slice() : [body]
 
-    const notices: string[] = []
-    if (settled.missions.length) notices.push(`▸ ${settled.missions.length} 个任务已结算`)
-    if (settled.chains.length) notices.push(`▸ ${settled.chains.length} 个链节点已推进`)
-    lines.push(...notices)
+    if (settled.missions.length) lines.push(T.note(`▸ ${settled.missions.length} 个任务已结算`))
+    if (settled.chains.length) lines.push(T.note(`▸ ${settled.chains.length} 个链节点已推进`))
 
-    if (opts.todo !== false) {
+    if (opts.todo !== false && game.todoHint) {
       const t = await game.todoLine(user)
-      if (t) lines.push('──────', t)
+      if (t) lines.push(T.div(), T.note(t))
     }
-    return lines.join('\n')
+
+    return emit(game, argv, lines)
   }
 }
 

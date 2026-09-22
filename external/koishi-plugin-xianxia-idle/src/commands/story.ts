@@ -8,6 +8,8 @@ import { T_ACH, T_CHAIN, T_CODEX } from '../game'
 import * as C from '../core/curves'
 import * as D from '../data'
 import { num } from '../core/fmt'
+import type { Line } from '../core/render'
+import { T } from '../core/render'
 import type { ChainDef, Realm } from '../types'
 import { CLASS_NAMES, TIER_NAMES } from '../types'
 import { closedMsg, shell } from './helpers'
@@ -37,26 +39,26 @@ export function registerStory (ctx: Context, game: Game) {
   ctx.command('任务链', '看全部篇章的进度')
     .alias('故事').alias('篇章')
     .action(shell(game, async (user, g) => {
-      const lines = ['【篇章】']
+      const lines: Line[] = [T.title('篇章')]
       let done = 0
       for (const chain of D.CHAINS) {
         const st = await chainState(g, user, chain)
-        if (st.state === 'completed') { done++; lines.push(`✔ ${chain.name}　已读完`) }
+        if (st.state === 'completed') { done++; lines.push(T.list(`✔ ${chain.name}　已读完`)) }
         else if (st.state === 'active') {
           const row = st.row!
           const node = chain.nodes[row.nodeSeq - 1]
           const left = row.finishAt ? (new Date(row.finishAt).getTime() - Date.now()) / 1000 : 0
-          lines.push(`▶ ${chain.name}　节点 ${row.nodeSeq} / ${C.CHAIN_NODES}　${node ? node.name : ''}${left > 0 ? `　还需 ${Math.ceil(left / 60)} 分` : '　可推进'}`)
+          lines.push(T.list(`▶ ${chain.name}　节点 ${row.nodeSeq} / ${C.CHAIN_NODES}　${node ? node.name : ''}${left > 0 ? `　还需 ${Math.ceil(left / 60)} 分` : '　可推进'}`))
         } else if (st.state === 'available') {
-          lines.push(`○ ${chain.name}　可接`)
+          lines.push(T.list(`○ ${chain.name}　可接`))
         } else {
           const cond = [`rank ≥ ${chain.unlock.rankMin}`]
           if (chain.unlock.chainDone) cond.push('需先完成前置篇章')
-          lines.push(`· ？　${chain.blurb}　${cond.join(' · ')}`)
+          lines.push(T.list(`· ？　${chain.blurb}　${cond.join(' · ')}`))
         }
       }
-      lines.push('──────')
-      lines.push(`已完成　${done} / ${D.CHAINS.length}`)
+      lines.push(T.div())
+      lines.push(T.kv('已完成', `${done} / ${D.CHAINS.length}`))
       return lines
     }))
 
@@ -82,11 +84,11 @@ export function registerStory (ctx: Context, game: Game) {
         readSeq: 0, completedAt: null,
       }], ['userId', 'chainId'])
       const first = chain.nodes[0]
-      const lines = [
-        `【已接 · ${chain.name}】`,
-        chain.prologue,
-        '──────',
-        `节点 1 / ${C.CHAIN_NODES}　${first ? first.name : ''}　需 ${Math.ceil(C.chainNodeDuration(chain.realm) / 3600)} 小时`,
+      const lines: Line[] = [
+        T.title(`已接 · ${chain.name}`),
+        T.prose(chain.prologue),
+        T.div(),
+        T.kv(`节点 1 / ${C.CHAIN_NODES}`, `${first ? first.name : ''}　需 ${Math.ceil(C.chainNodeDuration(chain.realm) / 3600)} 小时`),
       ]
       return lines
     }))
@@ -98,7 +100,7 @@ export function registerStory (ctx: Context, game: Game) {
       const active = rows.filter((r) => r.state === 'active')
       const completed = rows.filter((r) => r.state === 'completed')
       if (!rows.length) return '【还没接过任何篇章】'
-      const lines: string[] = []
+      const lines: Line[] = []
       for (const row of active) {
         const chain = D.CHAIN_BY_ID.get(row.chainId)
         if (!chain) continue
@@ -106,24 +108,24 @@ export function registerStory (ctx: Context, game: Game) {
         for (let seq = row.readSeq + 1; seq <= Math.max(0, row.nodeSeq - 1); seq++) {
           const node = chain.nodes[seq - 1]
           if (!node) continue
-          lines.push(`【${chain.name} · 节点 ${seq} ｜ ${node.name}】`)
-          lines.push(node.story.success)
-          if (node.story.hook) lines.push(`　${node.story.hook}`)
-          lines.push('')
+          lines.push(T.title(`${chain.name} · 节点 ${seq} ｜ ${node.name}`))
+          lines.push(T.prose(node.story.success))
+          if (node.story.hook) lines.push(T.prose(`　${node.story.hook}`))
+          lines.push(T.blank())
         }
         if (row.readSeq < row.nodeSeq - 1) {
           await database.set(T_CHAIN, { userId: user.userId, chainId: chain.id }, { readSeq: row.nodeSeq - 1 } as any)
         }
         const node = chain.nodes[row.nodeSeq - 1]
         const left = row.finishAt ? (new Date(row.finishAt).getTime() - Date.now()) / 1000 : 0
-        lines.push(`▶ ${chain.name}　节点 ${row.nodeSeq} / ${C.CHAIN_NODES}　${node ? node.name : ''}`)
-        if (node?.story.progress) lines.push(`　${node.story.progress}`)
-        lines.push(left > 0 ? `　还需 ${Math.ceil(left / 60)} 分钟` : '　已到点')
-        lines.push('')
+        lines.push(T.list(`▶ ${chain.name}　节点 ${row.nodeSeq} / ${C.CHAIN_NODES}　${node ? node.name : ''}`))
+        if (node?.story.progress) lines.push(T.prose(`　${node.story.progress}`))
+        lines.push(T.list(left > 0 ? `　还需 ${Math.ceil(left / 60)} 分钟` : '　已到点'))
+        lines.push(T.blank())
       }
       for (const row of completed) {
         const chain = D.CHAIN_BY_ID.get(row.chainId)
-        if (chain) lines.push(`✔ ${chain.name}　已读完全部 ${C.CHAIN_NODES} 个节点`)
+        if (chain) lines.push(T.list(`✔ ${chain.name}　已读完全部 ${C.CHAIN_NODES} 个节点`))
         if (row.readSeq < C.CHAIN_NODES) {
           await database.set(T_CHAIN, { userId: user.userId, chainId: row.chainId }, { readSeq: C.CHAIN_NODES } as any)
         }
@@ -145,22 +147,23 @@ export function registerStory (ctx: Context, game: Game) {
       const seq = args[1] ? Math.floor(Number(args[1])) : 0
       if (!seq) {
         return [
-          `【${chain.name}】已解锁 ${reached} / ${C.CHAIN_NODES} 节`,
-          ...chain.nodes.slice(0, reached).map((n, i) => `　${i + 1}. ${n.name}`),
-          `发「看故事 ${chain.name} 1」读第 1 节`,
-        ].join('\n')
+          T.title(chain.name, `已解锁 ${reached} / ${C.CHAIN_NODES} 节`),
+          ...chain.nodes.slice(0, reached).map((n, i) => T.list(`　${i + 1}. ${n.name}`)),
+          T.note(`发「看故事 ${chain.name} 1」读第 1 节`),
+        ]
       }
       if (seq < 1 || seq > C.CHAIN_NODES || seq > reached) return `【还没到这一段】可读到第 ${reached} 节`
       const node = chain.nodes[seq - 1]
-      return [
-        `【${chain.name} · 节点 ${seq} ｜ ${node.name}】`,
-        node.story.intro,
-        '──────',
-        node.story.progress,
-        '──────',
-        node.story.success,
-        node.story.hook ? `　${node.story.hook}` : '',
-      ].filter(Boolean).join('\n')
+      const out: Line[] = [
+        T.title(`${chain.name} · 节点 ${seq} ｜ ${node.name}`),
+        T.prose(node.story.intro),
+        T.div(),
+        T.prose(node.story.progress),
+        T.div(),
+        T.prose(node.story.success),
+      ]
+      if (node.story.hook) out.push(T.prose(`　${node.story.hook}`))
+      return out
     }))
 
   // ── E5 放弃链 ───────────────────────────────────────────────────────
@@ -175,9 +178,9 @@ export function registerStory (ctx: Context, game: Game) {
       if (!rows.length || rows[0].state !== 'active') return '【没在推这个篇章】'
       await database.set(T_CHAIN, { userId: user.userId, chainId: chain.id }, { state: 'available', finishAt: null } as any)
       return [
-        `【已放弃 · ${chain.name}】`,
-        `进度停在节点 ${rows[0].nodeSeq}　奖励不退`,
-      ].join('\n')
+        T.title(`已放弃 · ${chain.name}`),
+        T.list(`进度停在节点 ${rows[0].nodeSeq}　奖励不退`),
+      ]
     }))
 
   // ── E6 图鉴 ─────────────────────────────────────────────────────────
@@ -189,20 +192,20 @@ export function registerStory (ctx: Context, game: Game) {
       const items = await g.items(user.userId)
       const codex = await database.get(T_CODEX, { userId: user.userId })
       if (kind === '功法' || kind === 'technique') {
-        const lines = [`【功法图鉴 · ${ownedTech.length} / ${D.TECHNIQUES.length}】`]
+        const lines: Line[] = [T.title(`功法图鉴 · ${ownedTech.length} / ${D.TECHNIQUES.length}`)]
         for (let gr = 1; gr <= 7; gr++) {
           const all = D.TECHNIQUES.filter((t) => t.grade === gr)
           const got = all.filter((t) => ownedTech.some((o) => o.techId === t.id))
-          lines.push(`${C.gradeName(gr)}品　${got.length} / ${all.length}　${got.map((t) => t.name).join('　') || '—'}`)
+          lines.push(T.kv(`${C.gradeName(gr)}品`, `${got.length} / ${all.length}　${got.map((t) => t.name).join('　') || '—'}`))
         }
         return lines
       }
       if (kind === '丹药' || kind === 'pill') {
-        const lines = [`【丹药图鉴 · ${items.filter((i) => i.itemId.startsWith('P')).length} / ${D.PILLS.length}】`]
+        const lines: Line[] = [T.title(`丹药图鉴 · ${items.filter((i) => i.itemId.startsWith('P')).length} / ${D.PILLS.length}`)]
         for (let gr = 1; gr <= 7; gr++) {
           const all = D.PILLS.filter((p) => p.grade === gr)
           const got = all.filter((p) => items.some((i) => i.itemId === p.id))
-          lines.push(`${C.gradeName(gr)}品　${got.length} / ${all.length}　${got.map((p) => p.name).join('　') || '—'}`)
+          lines.push(T.kv(`${C.gradeName(gr)}品`, `${got.length} / ${all.length}　${got.map((p) => p.name).join('　') || '—'}`))
         }
         return lines
       }
@@ -210,18 +213,18 @@ export function registerStory (ctx: Context, game: Game) {
         const rows = codex.filter((c) => c.codexId.startsWith('C-CH-') || c.codexId.startsWith('C-M-'))
         const chainRows = codex.filter((c) => c.codexId.startsWith('C-CH-'))
         return [
-          `【故事图鉴 · ${rows.length} 条】`,
-          `篇章节点　${chainRows.length} / ${D.CHAINS.length * C.CHAIN_NODES}`,
-          `历练履历　${rows.length - chainRows.length} / ${D.MISSIONS.length}`,
-        ].join('\n')
+          T.title(`故事图鉴 · ${rows.length} 条`),
+          T.kv('篇章节点', `${chainRows.length} / ${D.CHAINS.length * C.CHAIN_NODES}`),
+          T.kv('历练履历', `${rows.length - chainRows.length} / ${D.MISSIONS.length}`),
+        ]
       }
       return [
-        `【图鉴】`,
-        `功法　${ownedTech.length} / ${D.TECHNIQUES.length}`,
-        `丹药　${items.filter((i) => i.itemId.startsWith('P')).length} / ${D.PILLS.length}`,
-        `篇章　${codex.filter((c) => c.codexId.startsWith('C-CH-')).length} / ${D.CHAINS.length * C.CHAIN_NODES}`,
-        '发「图鉴 功法|丹药|故事」',
-      ].join('\n')
+        T.title('图鉴'),
+        T.kv('功法', `${ownedTech.length} / ${D.TECHNIQUES.length}`),
+        T.kv('丹药', `${items.filter((i) => i.itemId.startsWith('P')).length} / ${D.PILLS.length}`),
+        T.kv('篇章', `${codex.filter((c) => c.codexId.startsWith('C-CH-')).length} / ${D.CHAINS.length * C.CHAIN_NODES}`),
+        T.note('发「图鉴 功法|丹药|故事」'),
+      ]
     }))
 
   // ── E7 成就 ─────────────────────────────────────────────────────────
@@ -262,10 +265,10 @@ export function registerStory (ctx: Context, game: Game) {
         if (await g.unlockAch(user.userId, d.id)) newly.push(d.name)
       }
       const got = await database.get(T_ACH, { userId: user.userId })
-      const lines = [`【成就 · ${got.length} / ${defs.length}】`]
-      lines.push(...defs.filter((d) => d.ok).map((d) => `✔ ${d.name}`))
-      lines.push(`未解锁　${defs.filter((d) => !d.ok).length} 个`)
-      if (newly.length) lines.push(`本次新解锁　${newly.join('　')}`)
+      const lines: Line[] = [T.title(`成就 · ${got.length} / ${defs.length}`)]
+      lines.push(...defs.filter((d) => d.ok).map((d) => T.list(`✔ ${d.name}`)))
+      lines.push(T.kv('未解锁', `${defs.filter((d) => !d.ok).length} 个`))
+      if (newly.length) lines.push(T.kv('本次新解锁', newly.join('　')))
       return lines
     }))
 }

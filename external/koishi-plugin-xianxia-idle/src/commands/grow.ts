@@ -9,6 +9,8 @@ import { T_ITEM, T_TECH, T_USER } from '../game'
 import * as C from '../core/curves'
 import * as D from '../data'
 import { amount, dur, num, pct } from '../core/fmt'
+import type { Line } from '../core/render'
+import { T } from '../core/render'
 import type { Grade, Tier } from '../types'
 import { CLASS_NAMES, TIER_NAMES } from '../types'
 import { closedMsg, effectText, shell } from './helpers'
@@ -23,16 +25,16 @@ export function registerGrow (ctx: Context, game: Game) {
     .alias('背包').alias('物品')
     .action(shell(game, async (user) => {
       const items = await game.items(user.userId)
-      const lines = [`【丹药 · 灵材 ${num(user.material)} · 碎片 ${user.fragments}】`]
+      const lines: Line[] = [T.title(`丹药 · 灵材 ${num(user.material)} · 碎片 ${user.fragments}`)]
       for (const cls of ['A', 'B', 'C', 'D', 'E'] as const) {
         const rows = items
           .map((r) => ({ row: r, pill: D.PILL_BY_ID.get(r.itemId) }))
           .filter((x) => x.pill && x.pill.cls === cls)
           .sort((a, b) => (a.pill!.grade - b.pill!.grade))
         if (!rows.length) continue
-        lines.push(`${CLASS_NAMES[cls]}　${rows.map((x) => `${x.pill!.name} ×${Math.round(x.row.count)}`).join('　')}`)
+        lines.push(T.kv(CLASS_NAMES[cls], rows.map((x) => `${x.pill!.name} ×${Math.round(x.row.count)}`).join('　')))
       }
-      if (items.length === 0) lines.push('（空）')
+      if (items.length === 0) lines.push(T.prose('（空）'))
       return lines
     }))
 
@@ -63,7 +65,7 @@ export function registerGrow (ctx: Context, game: Game) {
       }
 
       const stats = await g.stats(user)
-      const lines = [`【服用 · ${pill.name}（${C.gradeName(pill.grade)}品 · ${CLASS_NAMES[pill.cls]}）】`]
+      const lines: Line[] = [T.title(`服用 · ${pill.name}（${C.gradeName(pill.grade)}品 · ${CLASS_NAMES[pill.cls]}）`)]
 
       if (pill.cls === 'C') {
         // 突破丹：已满 95% 时**拒绝服用**，不让玩家白吃
@@ -83,36 +85,36 @@ export function registerGrow (ctx: Context, game: Game) {
           const each = C.expPillRate(pill.grade) * C.EP(user.rank) * bonus
           const exp = each * n
           await database.set(T_USER, { userId: user.userId }, (row: any) => ({ exp: $.add(row.exp, exp) }) as any)
-          lines.push(`修为　+${amount(exp)}${bonus > 1 ? `　丹药加成 ${pct(bonus - 1)}` : ''}`)
-          lines.push(`当前　${amount(user.exp + exp)} / ${amount(C.EP(user.rank))}　${pct(Math.min(1, (user.exp + exp) / C.EP(user.rank)))}`)
+          lines.push(T.kv('修为', `+${amount(exp)}${bonus > 1 ? `　丹药加成 ${pct(bonus - 1)}` : ''}`))
+          lines.push(T.kv('当前', `${amount(user.exp + exp)} / ${amount(C.EP(user.rank))}　${pct(Math.min(1, (user.exp + exp) / C.EP(user.rank)))}`))
           break
         }
         case 'B': {
           const p = C.bodyPillBonus(pill.grade) * bonus
           await g.addBuff(user.userId, 'body', p, C.PILL_DURATION)
-          lines.push(`生命 攻击　+${pct(p)}　30 分钟`)
+          lines.push(T.kv('生命 攻击', `+${pct(p)}　30 分钟`))
           break
         }
         case 'C': {
           const p = C.breakPillBonus(pill.grade) * n
           const cur = stats.breakPill + p
           await g.addBuff(user.userId, 'break', cur, 0)
-          lines.push(`突破成功率　+${p.toFixed(1)}pt　下一次突破`)
+          lines.push(T.kv('突破成功率', `+${p.toFixed(1)}pt　下一次突破`))
           break
         }
         case 'D': {
           const mult = Math.min(C.DAO_PILL_CAP, C.daoPillMul(pill.grade) * bonus)
           await g.addBuff(user.userId, 'dao', mult, C.PILL_DURATION)
-          lines.push(`增速　×${mult.toFixed(2)}　30 分钟`)
+          lines.push(T.kv('增速', `×${mult.toFixed(2)}　30 分钟`))
           break
         }
         case 'E': {
           await g.addBuff(user.userId, 'guard', 1, 0)
-          lines.push('护道　下一次历练必成功')
+          lines.push(T.kv('护道', '下一次历练必成功'))
           break
         }
       }
-      lines.push(`今日该品级已用 ${used + n} / ${C.PILL_DAILY_LIMIT}　同类冷却 3 分钟`)
+      lines.push(T.list(`今日该品级已用 ${used + n} / ${C.PILL_DAILY_LIMIT}　同类冷却 3 分钟`))
       return lines
     }))
 
@@ -122,21 +124,21 @@ export function registerGrow (ctx: Context, game: Game) {
     .action(shell(game, async (user) => {
       const tech = user.techId ? D.TECH_BY_ID.get(user.techId) : undefined
       const owned = await database.get(T_TECH, { userId: user.userId })
-      const lines: string[] = []
+      const lines: Line[] = []
       if (!tech) {
-        lines.push('【功法 · 无】')
+        lines.push(T.title('功法 · 无'))
       } else {
-        lines.push(`【功法 · ${tech.name} · ${TIER_NAMES[user.techTier]}】`)
-        lines.push(`品级　${C.gradeName(tech.grade)}品　倾向　${tech.tendency}　倍率　×${tech.mTech}`)
-        lines.push(`典出　${tech.dex}`)
+        lines.push(T.title(`功法 · ${tech.name} · ${TIER_NAMES[user.techTier]}`))
+        lines.push(T.kv('品级', `${C.gradeName(tech.grade)}品　倾向　${tech.tendency}　倍率　×${tech.mTech}`))
+        lines.push(T.kv('典出', tech.dex))
         const fx = (tech.tiers[user.techTier] || []).map((e) => effectText(e.code, e.value))
-        lines.push(`特效　${fx.join('　')}`)
+        lines.push(T.kv('特效', fx.join('　')))
         const mat = user.techTier === 'U' ? 0 : C.upgradeMaterial(tech.grade as Grade, user.techTier === 'L' ? 'M' : 'U')
-        if (user.techTier === 'U') lines.push('已是上品　封顶')
-        else lines.push(`升阶需灵材　${mat}`)
+        if (user.techTier === 'U') lines.push(T.kv('已是上品', '封顶'))
+        else lines.push(T.kv('升阶需灵材', `${mat}`))
       }
-      lines.push('──────')
-      lines.push(`已收集　${owned.length} / ${D.TECHNIQUES.length}`)
+      lines.push(T.div())
+      lines.push(T.kv('已收集', `${owned.length} / ${D.TECHNIQUES.length}`))
       return lines
     }))
 
@@ -169,20 +171,20 @@ export function registerGrow (ctx: Context, game: Game) {
         await g.save(user.userId, { techTier: toTier as Tier, techUpgradedAt: new Date() })
         await database.upsert(T_TECH, [{ userId: user.userId, techId: tech.id, tier: toTier as Tier, obtainedAt: new Date() }], ['userId', 'techId'])
         return [
-          `【升阶 · ${tech.name} → ${TIER_NAMES[toTier]}】`,
-          `消耗　灵材 ${mat}　修为 ${amount(expCost)}`,
-          `倍率　×${tech.mTech}`,
-          '冷却　1 小时',
-        ].join('\n')
+          T.title(`升阶 · ${tech.name} → ${TIER_NAMES[toTier]}`),
+          T.kv('消耗', `灵材 ${mat}　修为 ${amount(expCost)}`),
+          T.kv('倍率', `×${tech.mTech}`),
+          T.kv('冷却', '1 小时'),
+        ]
       }
       // 失败只损失修为（返还 50%），不掉材料
       const refund = expCost * C.UPGRADE_FAIL_REFUND
       await database.set(T_USER, { userId: user.userId }, (row: any) => ({ exp: $.add(row.exp, refund) }) as any)
       return [
-        `【升阶 · 失败】${tech.name}　成功率 ${pct(rate)}`,
-        `消耗　灵材 ${mat}　修为 ${amount(expCost)}`,
-        `返还　修为 50%　+${amount(refund)}`,
-      ].join('\n')
+        T.title('升阶 · 失败', `${tech.name}　成功率 ${pct(rate)}`),
+        T.kv('消耗', `灵材 ${mat}　修为 ${amount(expCost)}`),
+        T.kv('返还', `修为 50%　+${amount(refund)}`),
+      ]
     }))
 
   // ── D5 炼丹 ─────────────────────────────────────────────────────────
@@ -205,10 +207,10 @@ export function registerGrow (ctx: Context, game: Game) {
       const times = Math.min(want, maxByPill, maxByMat)
       if (times <= 0) {
         return [
-          '【炼不了】',
-          `需要　${src.name} ×${C.ALCHEMY_PILL_COST} + 灵材 ${matPer}（每炼一次）`,
-          `你有　${src.name} ×${Math.round(have)}　灵材 ${num(user.material)}`,
-        ].join('\n')
+          T.title('炼不了'),
+          T.kv('需要', `${src.name} ×${C.ALCHEMY_PILL_COST} + 灵材 ${matPer}（每炼一次）`),
+          T.kv('你有', `${src.name} ×${Math.round(have)}　灵材 ${num(user.material)}`),
+        ]
       }
       if (!(await g.consumeItem(user.userId, src.id, times * C.ALCHEMY_PILL_COST))) return '【扣减失败】'
       await database.set(T_USER, { userId: user.userId, material: { $gte: matPer * times } } as any, (row: any) => ({
@@ -216,10 +218,10 @@ export function registerGrow (ctx: Context, game: Game) {
       }) as any)
       await g.addItem(user.userId, target.id, times)
       return [
-        `【炼丹 · ${times} 次】`,
-        `消耗　${src.name} ×${times * C.ALCHEMY_PILL_COST}　灵材 ${matPer * times}`,
-        `得到　${target.name} ×${times}（${C.gradeName(targetGrade)}品）`,
-      ].join('\n')
+        T.title(`炼丹 · ${times} 次`),
+        T.kv('消耗', `${src.name} ×${times * C.ALCHEMY_PILL_COST}　灵材 ${matPer * times}`),
+        T.kv('得到', `${target.name} ×${times}（${C.gradeName(targetGrade)}品）`),
+      ]
     }))
 
   // ── D6 喂丹 ─────────────────────────────────────────────────────────
@@ -239,12 +241,12 @@ export function registerGrow (ctx: Context, game: Game) {
       const before = C.furnaceLevel(user.alchemyExp)
       await database.set(T_USER, { userId: user.userId }, (row: any) => ({ alchemyExp: $.add(row.alchemyExp, gain) }) as any)
       const after = C.furnaceLevel(user.alchemyExp + gain)
-      const lines = [
-        `【喂丹 · ${pill.name} ×${n}】`,
-        `丹药经验　+${num(gain)}`,
-        `丹炉　${before} 级 → ${after} 级`,
+      const lines: Line[] = [
+        T.title(`喂丹 · ${pill.name} ×${n}`),
+        T.kv('丹药经验', `+${num(gain)}`),
+        T.kv('丹炉', `${before} 级 → ${after} 级`),
       ]
-      if (after > before) lines.push('新加成已生效')
+      if (after > before) lines.push(T.prose('新加成已生效'))
       return lines
     }))
 
@@ -256,14 +258,14 @@ export function registerGrow (ctx: Context, game: Game) {
       let acc = 0
       for (let i = 0; i < C.FURNACE_THRESHOLDS.length; i++) acc += C.FURNACE_THRESHOLDS[i]
       const nextAcc = level < 15 ? C.FURNACE_THRESHOLDS.slice(0, level + 1).reduce((a, b) => a + b, 0) : acc
-      const lines = [
-        `【丹炉 · ${level} / 15 级】`,
+      const lines: Line[] = [
+        T.title(`丹炉 · ${level} / 15 级`),
         level < 15
-          ? `丹药经验　${num(user.alchemyExp)} / ${num(nextAcc)}`
-          : `丹药经验　${num(user.alchemyExp)}　满级`,
-        `加成　丹药效果 +${pct(fb.pillPct, 0)}　增速 +${pct(fb.speedPct, 0)}　突破成功率 +${fb.breakPt}pt`,
+          ? T.kv('丹药经验', `${num(user.alchemyExp)} / ${num(nextAcc)}`)
+          : T.kv('丹药经验', `${num(user.alchemyExp)}　满级`),
+        T.kv('加成', `丹药效果 +${pct(fb.pillPct, 0)}　增速 +${pct(fb.speedPct, 0)}　突破成功率 +${fb.breakPt}pt`),
       ]
-      if (level < 15) lines.push(`本级还需　${num(nextAcc - user.alchemyExp)}`)
+      if (level < 15) lines.push(T.kv('本级还需', num(nextAcc - user.alchemyExp)))
       return lines
     }))
 }

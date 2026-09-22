@@ -13,6 +13,8 @@
     "smoke": "node -r esbuild-register scripts/smoke-test.ts",
     "smoke:game": "node -r esbuild-register scripts/smoke-xianxia.ts",
     "probe:style": "node -r esbuild-register scripts/probe-style.ts",
+    "golden": "node -r esbuild-register scripts/golden-render.ts",
+    "golden:check": "node -r esbuild-register scripts/golden-render.ts --check",
     "gen": "node scripts/gen-techniques.mjs && node scripts/gen-pills.mjs && node scripts/gen-chains.mjs && node scripts/gen-story-data.mjs",
     "dep": "yakumo dep"
   },

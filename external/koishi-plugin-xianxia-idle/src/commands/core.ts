@@ -15,6 +15,8 @@ import { T_CHAIN, T_LOG, T_QUEUE, T_USER } from '../game'
 import * as C from '../core/curves'
 import * as D from '../data'
 import { amount, dur, eta, num, pct } from '../core/fmt'
+import type { Line } from '../core/render'
+import { T } from '../core/render'
 import type { Grade, MissionDef, Purpose, Realm } from '../types'
 import { GRADE_NAMES, TIER_NAMES } from '../types'
 import { closedMsg, effectText, parseGrade, parsePurpose, PURPOSE_LABEL, shell } from './helpers'
@@ -80,30 +82,30 @@ export function registerCore (ctx: Context, game: Game) {
   }
 
   /** 渲染菜单（多选一） */
-  async function renderMenu (g: Game, user: XUser, topLine?: string): Promise<string> {
+  async function renderMenu (g: Game, user: XUser, top?: Line[]): Promise<Line[]> {
     const quota = g.quotaOf(user)
     const left = quota - user.quotaUsed
-    const lines: string[] = []
-    if (topLine) lines.push(topLine)
+    const lines: Line[] = []
+    if (top) lines.push(...top)
     if (left <= 0) {
-      lines.push(`【历练】今日次数已用尽　${user.quotaUsed} / ${quota}`)
-      return lines.join('\n')
+      lines.push(T.title('历练', `今日次数已用尽　${user.quotaUsed} / ${quota}`))
+      return lines
     }
     const recent = user.recentMissions ? user.recentMissions.split(',') : []
     const cands = buildCandidates(g, user, recent)
     await g.save(user.userId, { pendingMenu: cands.map((m) => m.id).join(',') })
     const stats = await g.stats(user)
-    lines.push(`【历练 · 今日剩 ${left} / ${quota} 次】`)
+    lines.push(T.title(`历练 · 今日剩 ${left} / ${quota} 次`))
     cands.forEach((m, i) => {
       const info = parseMissionId(m.id)!
       const rate = C.successRate(stats.punch, C.missionReq(user.rank, info.grade))
       const secs = C.missionDuration(user.rank, info.grade)
       const exp = C.EP(user.rank) * C.EXP_MUL[info.grade - 1]
-      lines.push(`${CIRCLED[i]} ${PURPOSE_LABEL[info.purpose]}·${GRADE_NAMES[info.grade - 1]}档　${m.name}　${dur(secs)}　${pct(rate)}　修为 ${amount(exp)}`)
+      lines.push(T.list(`${CIRCLED[i]} ${PURPOSE_LABEL[info.purpose]}·${GRADE_NAMES[info.grade - 1]}档　${m.name}　${dur(secs)}　${pct(rate)}　修为 ${amount(exp)}`))
     })
-    lines.push('──────')
-    lines.push('发编号选择 · 「历练 换」换一批')
-    return lines.join('\n')
+    lines.push(T.div())
+    lines.push(T.note('发编号选择 · 「历练 换」换一批'))
+    return lines
   }
 
   // ── A1 修仙：建档 + 开场引导 ────────────────────────────────────────
@@ -114,17 +116,17 @@ export function registerCore (ctx: Context, game: Game) {
       await game.setFlag(user.userId, 'F-INTRO', 1)
       if (!isNew) {
         const pool = C.EP(user.rank)
-        return `【${C.rankName(user.rank)}】修为 ${amount(user.exp)} / ${amount(pool)}　${pct(Math.min(1, user.exp / pool))}`
+        return T.title(C.rankName(user.rank), `修为 ${amount(user.exp)} / ${amount(pool)}　${pct(Math.min(1, user.exp / pool))}`)
       }
       return [
-        '【青云宗 · 杂役院】',
-        '你是青云宗扫东院的杂役。你没有名字，没有功法，也不配参加问道试。',
-        '但你捡到了一块不该出现的玉简。',
-        '',
-        '修为会自己往前走，不必守着——关掉手机也在涨：',
-        '　/闭关　开始挂机（离线照常累计）',
-        '　/状态　看看自己',
-        '　/历练　出门做事，攒功法和丹药（会给一份菜单）',
+        T.title('青云宗 · 杂役院'),
+        T.prose('你是青云宗扫东院的杂役。你没有名字，没有功法，也不配参加问道试。'),
+        T.prose('但你捡到了一块不该出现的玉简。'),
+        T.blank(),
+        T.prose('修为会自己往前走，不必守着——关掉手机也在涨：'),
+        T.list('　/闭关　开始挂机（离线照常累计）'),
+        T.list('　/状态　看看自己'),
+        T.list('　/历练　出门做事，攒功法和丹药（会给一份菜单）'),
       ]
     }))
 
@@ -137,9 +139,9 @@ export function registerCore (ctx: Context, game: Game) {
       const pool = C.EP(user.rank)
       const left = Math.max(0, pool - user.exp)
       return [
-        '【闭关 · 开始】',
-        `增速　${stats.speed.toFixed(2)} /秒`,
-        `本层还需　${dur(left / stats.speed)}`,
+        T.title('闭关 · 开始'),
+        T.kv('增速', `${stats.speed.toFixed(2)} /秒`),
+        T.kv('本层还需', dur(left / stats.speed)),
       ]
     }))
 
@@ -156,9 +158,9 @@ export function registerCore (ctx: Context, game: Game) {
       user.seclusionStart = null
       const pool = C.EP(user.rank)
       const sec = settled.sec
-      const lines = [`【出关 · 合计 ${dur(total)}】`]
-      if (sec.gained) lines.push(`修为　+${amount(sec.gained)}`)
-      lines.push(`当前　${amount(user.exp)} / ${amount(pool)}　${pct(Math.min(1, user.exp / pool))}`)
+      const lines: Line[] = [T.title(`出关 · 合计 ${dur(total)}`)]
+      if (sec.gained) lines.push(T.kv('修为', `+${amount(sec.gained)}`))
+      lines.push(T.kv('当前', `${amount(user.exp)} / ${amount(pool)}　${pct(Math.min(1, user.exp / pool))}`))
       return lines
     }))
 
@@ -167,16 +169,16 @@ export function registerCore (ctx: Context, game: Game) {
     .alias('属性').alias('me')
     .action(shell(game, async (user) => {
       const s = await game.stats(user)
-      const lines: string[] = []
-      lines.push(`【状态】${C.rankName(user.rank)}　${user.rank} / 81`)
+      const lines: Line[] = []
+      lines.push(T.title('状态', `${C.rankName(user.rank)}　${user.rank} / 81`))
       lines.push(...game.statLines(s, user))
-      lines.push('──────')
+      lines.push(T.div())
       if (s.tech) {
-        lines.push(`功法　${s.tech.name} · ${TIER_NAMES[s.tier!]}　×${s.tech.mTech}`)
+        lines.push(T.kv('功法', `${s.tech.name} · ${TIER_NAMES[s.tier!]}　×${s.tech.mTech}`))
         const fx = (s.tech.tiers[s.tier!] || []).map((e) => effectText(e.code, e.value))
-        if (fx.length) lines.push(`特效　${fx.join('　')}`)
+        if (fx.length) lines.push(T.kv('特效', fx.join('　')))
       } else {
-        lines.push('功法　无')
+        lines.push(T.kv('功法', '无'))
       }
       const buffText: string[] = []
       for (const b of s.buffs) {
@@ -187,8 +189,8 @@ export function registerCore (ctx: Context, game: Game) {
         else if (b.kind === 'break') buffText.push(`破境 +${b.value}pt（下一次突破）`)
         else if (b.kind === 'guard') buffText.push('护道（下一次历练必成功）')
       }
-      lines.push(`丹药　${buffText.length ? buffText.join('　') : '无'}`)
-      lines.push(`灵材　${num(user.material)}　碎片　${user.fragments}　丹炉　${s.furnace.level} 级`)
+      lines.push(T.kv('丹药', buffText.length ? buffText.join('　') : '无'))
+      lines.push(T.kv('灵材', `${num(user.material)}　碎片　${user.fragments}　丹炉　${s.furnace.level} 级`))
       return lines
     }))
 
@@ -205,9 +207,9 @@ export function registerCore (ctx: Context, game: Game) {
       if (user.exp < pool) {
         const s = await g.stats(user)
         return [
-          `【修为不足】${amount(user.exp)} / ${amount(pool)}　${pct(user.exp / pool)}`,
-          `差 ${amount(pool - user.exp)}　${eta(pool - user.exp, s.speed)}`,
-        ].join('\n')
+          T.title('修为不足', `${amount(user.exp)} / ${amount(pool)}　${pct(user.exp / pool)}`),
+          T.list(`差 ${amount(pool - user.exp)}　${eta(pool - user.exp, s.speed)}`),
+        ]
       }
       const s = await g.stats(user)
       const pityBefore = await g.pity(user.userId)
@@ -222,21 +224,21 @@ export function registerCore (ctx: Context, game: Game) {
       const compText = comp.length > 1 ? `　${comp.join('　')}` : ''
       if (r.success) {
         return [
-          `【突破 · ${C.rankName(before)} → ${C.rankName(user.rank)}】`,
-          `成功率　${pct(r.rate)}${compText}`,
-          '判定　✔ 成功',
-          `消耗　修为 ${amount(pool)}　剩余 ${amount(user.exp)}`,
-          '──────',
-          `当前　${C.rankName(user.rank)}　${user.rank} / 81　下一层 ${amount(C.EP(user.rank))}`,
+          T.title(`突破 · ${C.rankName(before)} → ${C.rankName(user.rank)}`),
+          T.kv('成功率', `${pct(r.rate)}${compText}`),
+          T.kv('判定', '✔ 成功'),
+          T.kv('消耗', `修为 ${amount(pool)}　剩余 ${amount(user.exp)}`),
+          T.div(),
+          T.kv('当前', `${C.rankName(user.rank)}　${user.rank} / 81　下一层 ${amount(C.EP(user.rank))}`),
         ]
       }
       const pity = pityBefore + 1
       return [
-        `【突破 · ${C.rankName(before)}】失败`,
-        `成功率　${pct(r.rate)}${compText}`,
-        '判定　✘',
-        `修为退回 70%　${amount(user.exp)} / ${amount(pool)}`,
-        `连败　${pity} / ${C.BREAK_PITY_AFTER}${pity >= C.BREAK_PITY_AFTER ? `　下次 +${(C.BREAK_PITY_BONUS * 100).toFixed(0)}pt` : ''}`,
+        T.title(`突破 · ${C.rankName(before)}`, '失败'),
+        T.kv('成功率', `${pct(r.rate)}${compText}`),
+        T.kv('判定', '✘'),
+        T.kv('修为退回 70%', `${amount(user.exp)} / ${amount(pool)}`),
+        T.kv('连败', `${pity} / ${C.BREAK_PITY_AFTER}${pity >= C.BREAK_PITY_AFTER ? `　下次 +${(C.BREAK_PITY_BONUS * 100).toFixed(0)}pt` : ''}`),
       ]
     }))
 
@@ -266,23 +268,23 @@ export function registerCore (ctx: Context, game: Game) {
       if (/^\d+$/.test(sel)) {
         const idx = Number(sel) - 1
         const menu = user.pendingMenu ? user.pendingMenu.split(',') : []
-        if (!menu.length) return renderMenu(g, user, '【还没有菜单】')
+        if (!menu.length) return renderMenu(g, user, [T.title('还没有菜单')])
         if (idx < 0 || idx >= menu.length) {
-          return renderMenu(g, user, `【没有第 ${sel} 个】菜单里只有 ${menu.length} 个。`)
+          return renderMenu(g, user, [T.title(`没有第 ${sel} 个`, `菜单里只有 ${menu.length} 个。`)])
         }
         const missionId = menu[idx]
         const mission = D.MISSION_BY_ID.get(missionId)
         const info = parseMissionId(missionId)
-        if (!mission || !info) return renderMenu(g, user, '【这条任务的数据丢了】')
+        if (!mission || !info) return renderMenu(g, user, [T.title('这条任务的数据丢了')])
         if (user.quotaUsed >= quota) return renderMenu(g, user)
-        if (!(await spendQuota(user, quota, 1))) return renderMenu(g, user, '【次数不足】')
+        if (!(await spendQuota(user, quota, 1))) return renderMenu(g, user, [T.title('次数不足')])
         const finish = await enqueue(g, user, mission, info.grade)
         const rate = C.successRate((await g.stats(user)).punch, C.missionReq(user.rank, info.grade))
-        const top = [
-          `【已排 · ${PURPOSE_LABEL[info.purpose]}·${GRADE_NAMES[info.grade - 1]}档　${mission.name}】`,
-          `完成于 ${dur((finish - Date.now()) / 1000)}后　预计成功率 ${pct(rate)}`,
-          '',
-        ].join('\n')
+        const top: Line[] = [
+          T.title(`已排 · ${PURPOSE_LABEL[info.purpose]}·${GRADE_NAMES[info.grade - 1]}档　${mission.name}`),
+          T.list(`完成于 ${dur((finish - Date.now()) / 1000)}后　预计成功率 ${pct(rate)}`),
+          T.blank(),
+        ]
         return renderMenu(g, user, top)
       }
 
@@ -290,7 +292,7 @@ export function registerCore (ctx: Context, game: Game) {
       if (sel) {
         const purpose = parsePurpose(sel) as Purpose | null
         if (!purpose) {
-          return renderMenu(g, user, `【没有「${sel}」这个选项】`)
+          return renderMenu(g, user, [T.title(`没有「${sel}」这个选项`)])
         }
         if (!gradeRaw) {
           // 只给了目的 → 只列该目的的候选
@@ -300,11 +302,11 @@ export function registerCore (ctx: Context, game: Game) {
           if (!pool.length) return `【这个境界还没有「${PURPOSE_LABEL[purpose]}」类任务】`
           await g.save(user.userId, { pendingMenu: pool.map((m) => m.id).join(',') })
           const stats = await g.stats(user)
-          const lines = [`【历练 · ${PURPOSE_LABEL[purpose]}　${GRADE_NAMES[grade - 1]}档】`]
+          const lines: Line[] = [T.title(`历练 · ${PURPOSE_LABEL[purpose]}　${GRADE_NAMES[grade - 1]}档`)]
           pool.forEach((m, i) => {
-            lines.push(`${CIRCLED[i]} ${m.name}　${dur(C.missionDuration(user.rank, grade))}　${pct(C.successRate(stats.punch, C.missionReq(user.rank, grade)))}　修为 ${amount(C.EP(user.rank) * C.EXP_MUL[grade - 1])}`)
+            lines.push(T.list(`${CIRCLED[i]} ${m.name}　${dur(C.missionDuration(user.rank, grade))}　${pct(C.successRate(stats.punch, C.missionReq(user.rank, grade)))}　修为 ${amount(C.EP(user.rank) * C.EXP_MUL[grade - 1])}`))
           })
-          lines.push('发编号选择')
+          lines.push(T.note('发编号选择'))
           return lines
         }
         const grade = parseGrade(gradeRaw)
@@ -329,12 +331,12 @@ export function registerCore (ctx: Context, game: Game) {
         }
         await g.save(user.userId, { recentMissions: recent.slice(-12).join(',') })
         const rate = C.successRate((await g.stats(user)).punch, C.missionReq(user.rank, grade as Grade))
-        const lines = [`【历练 · ${created.length} 个任务已排入】`]
+        const lines: Line[] = [T.title(`历练 · ${created.length} 个任务已排入`)]
         created.forEach((c, i) => {
-          lines.push(`${CIRCLED[i]} ${PURPOSE_LABEL[purpose]} · ${GRADE_NAMES[grade - 1]}档　${c.name}　完成于 ${dur((c.finish - Date.now()) / 1000)}后`)
+          lines.push(T.list(`${CIRCLED[i]} ${PURPOSE_LABEL[purpose]} · ${GRADE_NAMES[grade - 1]}档　${c.name}　完成于 ${dur((c.finish - Date.now()) / 1000)}后`))
         })
-        lines.push(`预计成功率　${pct(rate)}`)
-        lines.push(`今日次数　${user.quotaUsed + created.length} / ${quota}`)
+        lines.push(T.kv('预计成功率', pct(rate)))
+        lines.push(T.kv('今日次数', `${user.quotaUsed + created.length} / ${quota}`))
         return lines
       }
 
@@ -357,23 +359,25 @@ export function registerCore (ctx: Context, game: Game) {
         if (!logs.length) {
           const pending = rows.filter((r) => new Date(r.finishAt).getTime() > Date.now())
           return [
-            '【没有可收的任务】',
-            pending.length ? `队列里还有 ${pending.length} 个未完成　最早 ${dur((new Date(pending[0].finishAt).getTime() - Date.now()) / 1000)}后` : '队列是空的',
-          ].join('\n')
+            T.title('没有可收的任务'),
+            pending.length
+              ? T.list(`队列里还有 ${pending.length} 个未完成　最早 ${dur((new Date(pending[0].finishAt).getTime() - Date.now()) / 1000)}后`)
+              : T.prose('队列是空的'),
+          ]
         }
-        const lines = [`【任务结算 · ${logs.length} 个】`]
+        const lines: Line[] = [T.title(`任务结算 · ${logs.length} 个`)]
         let totalExp = 0
         for (const log of logs) {
           const m = D.MISSION_BY_ID.get(log.missionId)
           const ok = log.success === 1
-          lines.push('')
-          lines.push(`${m ? `${PURPOSE_LABEL[m.purpose]} · ${GRADE_NAMES[m.grade - 1]}档　${m.name}` : log.missionId}　${ok ? '✔' : '✘'}`)
-          if (m) lines.push(`　${ok ? m.story.success : m.story.fail}`)
-          lines.push(`　+修为 ${amount(log.gainExp)}${log.extra ? `　+${log.extra}` : ''}${ok ? '' : '（保底 30%）'}`)
+          lines.push(T.blank())
+          lines.push(T.list(`${m ? `${PURPOSE_LABEL[m.purpose]} · ${GRADE_NAMES[m.grade - 1]}档　${m.name}` : log.missionId}　${ok ? '✔' : '✘'}`))
+          if (m) lines.push(T.prose(`　${ok ? m.story.success : m.story.fail}`))
+          lines.push(T.list(`　+修为 ${amount(log.gainExp)}${log.extra ? `　+${log.extra}` : ''}${ok ? '' : '（保底 30%）'}`))
           totalExp += log.gainExp
         }
-        lines.push('')
-        lines.push(`合计修为 +${amount(totalExp)}`)
+        lines.push(T.blank())
+        lines.push(T.list(`合计修为 +${amount(totalExp)}`))
         await g.save(user.userId, { logReadId: logs[logs.length - 1].id })
         return lines
       }
@@ -382,17 +386,17 @@ export function registerCore (ctx: Context, game: Game) {
       const waiting = rows.filter((r) => new Date(r.finishAt).getTime() > now)
       const unread = await database.get(T_LOG, { userId: user.userId, id: { $gt: user.logReadId } } as any)
       const quota = g.quotaOf(user)
-      const lines = [`【任务 · 队列 ${rows.length} 个】`]
+      const lines: Line[] = [T.title(`任务 · 队列 ${rows.length} 个`)]
       if (waiting.length) {
-        lines.push('进行中')
+        lines.push(T.head('进行中'))
         waiting.slice(0, 8).forEach((r, i) => {
           const m = D.MISSION_BY_ID.get(r.missionId)
-          lines.push(`${CIRCLED[i] ?? ''} ${m?.name ?? r.missionId}　剩 ${dur((new Date(r.finishAt).getTime() - now) / 1000)}`)
+          lines.push(T.list(`${CIRCLED[i] ?? ''} ${m?.name ?? r.missionId}　剩 ${dur((new Date(r.finishAt).getTime() - now) / 1000)}`))
         })
       }
-      if (done.length) lines.push(`已到点　${done.length} 个`)
-      if (!rows.length) lines.push('队列是空的')
-      lines.push(`今日次数　${user.quotaUsed} / ${quota}　可收 ${unread.length} 条`)
+      if (done.length) lines.push(T.kv('已到点', `${done.length} 个`))
+      if (!rows.length) lines.push(T.prose('队列是空的'))
+      lines.push(T.kv('今日次数', `${user.quotaUsed} / ${quota}　可收 ${unread.length} 条`))
       return lines
     }))
 
@@ -401,6 +405,11 @@ export function registerCore (ctx: Context, game: Game) {
     .alias('撤任务')
     .action(shell(game, async (user, g, argv, args) => {
       const seq = Math.floor(Number(args[0]))
+      // 漏参数时必须自己拦：`Number(undefined)` 是 NaN，直接丢给 sqlite 会抛异常，
+      // 玩家只看到一句「发生未知错误」。(踩过的坑)
+      // 措辞里**不能出现 `<序号>`**：Koishi 会把 send 出去的字符串当消息元素解析，
+      // `<序号>` 会变成一个真实的未知元素，把后面整段吞进去。(踩过的坑)
+      if (!Number.isInteger(seq)) return '【用法】放弃 序号　序号见「任务」'
       const rows = await database.get(T_QUEUE, { userId: user.userId, seq }, { limit: 1 })
       if (!rows.length) return `【没有这个任务】队列里没有第 ${seq} 个。`
       const row = rows[0]
@@ -414,6 +423,6 @@ export function registerCore (ctx: Context, game: Game) {
       await database.set(T_USER, { userId: user.userId, quotaUsed: { $gte: 1 } } as any, (r: any) => ({
         quotaUsed: $.add(r.quotaUsed, -1),
       }) as any)
-      return `【已放弃】${m?.name ?? row.missionId}　次数已退还`
+      return T.title('已放弃', `${m?.name ?? row.missionId}　次数已退还`)
     }))
 }

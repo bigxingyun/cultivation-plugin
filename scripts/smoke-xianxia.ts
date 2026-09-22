@@ -247,15 +247,66 @@ async function main () {
   const PURE_BAD = ['只能从', '——', '不是赌博', '不必守着', '记住了就是收获', '留到概率更低', '离线照常累计']
   const MIXED_BAD = ['只能从', '不是赌博', '不必守着', '记住了就是收获', '留到概率更低']
   const hits: string[] = []
+  // 半角尖括号会被 Koishi 当成消息元素解析，玩家看到的是一段被吞掉/错位的文本
+  const angle: string[] = []
   const groups: Array<[string[], string[]]> = [[PURE_CMDS, PURE_BAD], [MIXED_CMDS, MIXED_BAD]]
   for (const [cmds, bad] of groups) {
     for (const cmd of cmds) {
       const out = await send(c1, cmd)
       for (const b of bad) if (out.includes(b)) hits.push(`${cmd} → 「${b}」`)
+      for (const m of out.matchAll(/<[A-Za-z\u4e00-\u9fa5]/g)) angle.push(`${cmd} → ${JSON.stringify(out.slice(m.index, m.index + 12))}`)
     }
   }
   check('40 数据界面不含解释性文案', hits.length === 0,
     hits.join('；') || `扫描 ${PURE_CMDS.length + MIXED_CMDS.length} 条指令，0 处命中`)
+  check('40b 输出里没有半角尖括号（不会被当成消息元素）', angle.length === 0,
+    angle.slice(0, 4).join('；') || '全部数据界面干净')
+
+  // ── 41. 两条渲染路径：只在排版上不同，数据必须一模一样 ────────────────
+  const R = require('../external/koishi-plugin-xianxia-idle/src/core/render.ts')
+  const { T } = R
+  const body = [
+    T.title('状态', '练气一层　1 / 81'),
+    T.kv('修为', '0 / 16,500　████░░░░░░　0.0%'),
+    T.list('① 打怪·凡档　驱赶野猪　2 分钟　95.0%　修为 495'),
+    T.ord(1, '今日未签到'),
+    T.sec('修炼'),
+    T.head('进行中'),
+    T.div(),
+    T.note('▸ 待办：今日未签到 · 历练次数剩 3'),
+    T.prose('《青云旧籍》　未解锁 · rank ≥ 3'),
+    T.prose('他问：**「你在井底看见了什么？」**'),
+    '',
+    T.kv('灵材', '1,204'),
+  ]
+  const txt = R.renderText(body)
+  const md = R.renderMarkdown(body)
+  check('41 两条渲染路径的数据指纹一致', R.fingerprint(txt) === R.fingerprint(md),
+    R.fingerprint(txt) === R.fingerprint(md)
+      ? `纯文本 ${txt.length} 字符 / Markdown ${md.length} 字符，指纹一致`
+      : `指纹不一致：${JSON.stringify(R.fingerprint(txt))} ≠ ${JSON.stringify(R.fingerprint(md))}`)
+  check('41b Markdown 确实换了排版（不是空转）',
+    md.includes('\n- 修为') && md.includes('***') && md.includes('\n> ▸ 待办') && md.includes('**状态**'),
+    JSON.stringify(md.split('\n').slice(0, 4)))
+
+  // ── 42. 渲染模式判定：auto 只对 QQ 官方机器人开 Markdown ───────────────
+  const P = R.pickRender
+  check('42 auto 只认 QQ 官方（qq），频道 qqguild 与其它平台走纯文本',
+    P('auto', 'qq') === 'markdown' && P('auto', 'qqguild') === 'text' && P('auto', 'onebot') === 'text'
+    && P('auto', undefined) === 'text' && P('text', 'qq') === 'text' && P('markdown', 'onebot') === 'markdown',
+    `qq=${P('auto', 'qq')} qqguild=${P('auto', 'qqguild')} onebot=${P('auto', 'onebot')} 未知名=${P('auto', undefined)}`)
+
+  // ── 43. 出口封装：Markdown 模式必须包成 <qq:markdown> 元素 ─────────────
+  const { emit } = require('../external/koishi-plugin-xianxia-idle/src/commands/helpers.ts')
+  const sample = [T.kv('修为', '1')]
+  const qqOut = emit({ renderConfig: 'auto' } as any, { session: { platform: 'qq' } }, sample)
+  const obOut = emit({ renderConfig: 'auto' } as any, { session: { platform: 'onebot' } }, sample)
+  const forceText = emit({ renderConfig: 'text' } as any, { session: { platform: 'qq' } }, sample)
+  check('43 qq 平台包成 qq:markdown 元素，其它平台仍是字符串',
+    qqOut?.type === 'qq:markdown' && String(qqOut).includes('<qq:markdown>')
+    && typeof obOut === 'string' && obOut === '修为　1'
+    && typeof forceText === 'string' && forceText === '修为　1',
+    `qq=${String(qqOut).slice(0, 24)}…｜onebot=${JSON.stringify(obOut)}`)
 
   // ── 收尾 ───────────────────────────────────────────────────────────
   const passed = checks.filter((c) => c.pass).length

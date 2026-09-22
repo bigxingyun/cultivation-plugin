@@ -14,6 +14,8 @@ import { CLASS_NAMES, PURPOSE_NAMES, TIER_NAMES } from './types'
 import * as C from './core/curves'
 import * as D from './data'
 import { amount, dur, num, pct } from './core/fmt'
+import type { Line, RenderConfig } from './core/render'
+import { T } from './core/render'
 
 const logger = new Logger('xianxia')
 
@@ -244,8 +246,23 @@ export interface MissionOutcome {
   technique?: { tech: TechniqueDef; tier: Tier }
 }
 
+export interface GameOptions {
+  /** 输出渲染方式：auto 只对 QQ 官方机器人开 Markdown（core/render.ts） */
+  render?: RenderConfig
+  /** 是否在回复末尾附待办摘要 */
+  todoHint?: boolean
+}
+
 export class Game {
-  constructor (public ctx: Context) {}
+  constructor (public ctx: Context, public opts: GameOptions = {}) {}
+
+  get renderConfig (): RenderConfig {
+    return this.opts.render ?? 'auto'
+  }
+
+  get todoHint (): boolean {
+    return this.opts.todoHint !== false
+  }
 
   // ── 用户档 ──────────────────────────────────────────────────────────
   async ensure (userId: string): Promise<XUser> {
@@ -788,9 +805,10 @@ export class Game {
   }
 
   // ── 状态拆解文本（只摆数据，不做解释：§4.4「数据界面 / 帮助界面」分层） ──
-  statLines (s: Stats, user: XUser): string[] {
-    const lines: string[] = []
-    lines.push(`修为　${amount(user.exp)} / ${amount(C.EP(user.rank))}　${this.bar(user.rank, user.exp)}　${pct(Math.min(1, user.exp / C.EP(user.rank))) }`)
+  statLines (s: Stats, user: XUser): Line[] {
+    const lines: Line[] = []
+    const pool = C.EP(user.rank)
+    lines.push(T.kv('修为', `${amount(user.exp)} / ${amount(pool)}　${this.bar(user.rank, user.exp)}　${pct(Math.min(1, user.exp / pool))}`))
     // 加成拆解：只有一个因子时是废话，不显示；多个因子才是「为什么变强」的数据
     const parts = [`境界 ×${s.speedBase.toFixed(2)}`]
     if (s.tech) parts.push(`功法 ×${s.tech.mTech}`)
@@ -798,14 +816,14 @@ export class Game {
     if (s.speedMul > 1) parts.push(`状态 ×${s.speedMul.toFixed(2)}`)
     if (s.speedDebuff < 1) parts.push(`负面 ×${s.speedDebuff.toFixed(2)}`)
     if (s.furnace.speedPct) parts.push(`丹炉 +${pct(s.furnace.speedPct, 0)}`)
-    lines.push(`增速　${s.speed.toFixed(2)} /秒${parts.length > 1 ? `　（${parts.join('　')}）` : ''}`)
+    lines.push(T.kv('增速', `${s.speed.toFixed(2)} /秒${parts.length > 1 ? `　（${parts.join('　')}）` : ''}`))
     lines.push(user.seclusionStart
-      ? `闭关　进行中　已挂 ${dur((Date.now() - new Date(user.seclusionStart).getTime()) / 1000)}`
-      : '闭关　未开启')
+      ? T.kv('闭关', `进行中　已挂 ${dur((Date.now() - new Date(user.seclusionStart).getTime()) / 1000)}`)
+      : T.kv('闭关', '未开启'))
     const hp = s.hpBase * (1 + s.hpPct)
     const atk = s.atkBase * (1 + s.atkPct)
-    lines.push(`生命　${num(hp)}　攻击　${num(atk)}　闪避　${(C.dodge(user.rank) + s.dodgeBonus).toFixed(2)}%`)
-    lines.push(`战力　${num(s.punch)}`)
+    lines.push(T.kv('生命', `${num(hp)}　攻击　${num(atk)}　闪避　${(C.dodge(user.rank) + s.dodgeBonus).toFixed(2)}%`))
+    lines.push(T.kv('战力', num(s.punch)))
     return lines
   }
 
