@@ -66,6 +66,8 @@ export function registerStory (ctx: Context, game: Game) {
   ctx.command('接链 <链名>', '接取一个已解锁的篇章')
     .alias('接故事')
     .action(shell(game, async (user, g, argv, args) => {
+      const blocked = closedMsg(user)
+      if (blocked) return blocked
       const key = String(args[0] ?? '')
       if (!key) return '【用法】接链 青云旧籍'
       const chain = D.CHAINS.find((c) => c.name === key) ?? D.CHAINS.find((c) => c.id === key)

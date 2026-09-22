@@ -50,10 +50,9 @@ export function registerGrow (ctx: Context, game: Game) {
       const have = await g.itemCount(user.userId, pill.id)
       if (have < n) return `【数量不够】你有 ${pill.name} ×${Math.round(have)}`
 
-      // 同类冷却 3 分钟
       const cds = await g.activeBuffs(user.userId)
       if (cds.some((b) => b.kind === CD_PREFIX + pill.id)) {
-        return `【冷却中】${pill.name}　同类冷却 3 分钟`
+        return `【冷却中】${pill.name}　同种冷却 3 分钟`
       }
       // 每品级每日 3 次
       const day = C.today()
@@ -114,7 +113,7 @@ export function registerGrow (ctx: Context, game: Game) {
           break
         }
       }
-      lines.push(T.list(`今日该品级已用 ${used + n} / ${C.PILL_DAILY_LIMIT}　同类冷却 3 分钟`))
+      lines.push(T.list(`今日该品级已用 ${used + n} / ${C.PILL_DAILY_LIMIT}　同种冷却 3 分钟`))
       return lines
     }))
 
@@ -160,11 +159,12 @@ export function registerGrow (ctx: Context, game: Game) {
       const expCost = C.upgradeExp(user.rank, toTier)
       if (user.material < mat) return `【灵材不足】需要 ${mat}　现有 ${num(user.material)}`
       if (user.exp < expCost) return `【修为不足】需要 ${amount(expCost)}　现有 ${amount(user.exp)}`
-      // 原子扣灵材
-      const res = await database.set(T_USER, { userId: user.userId, material: { $gte: mat } } as any, (row: any) => ({
+      const res = await database.set(T_USER, {
+        userId: user.userId, material: { $gte: mat }, exp: { $gte: expCost },
+      } as any, (row: any) => ({
         material: $.add(row.material, -mat), exp: $.add(row.exp, -expCost),
       }) as any)
-      if (!res.matched) return '【灵材不足】'
+      if (!res.matched) return '【灵材或修为不足】'
       const rate = C.UPGRADE_RATE[toTier]
       const ok = Math.random() < rate
       if (ok) {

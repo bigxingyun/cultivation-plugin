@@ -171,7 +171,7 @@ async function main () {
   const expAfterPill = (await db.get('xianxia_user', { userId: 'u1' }))[0].exp
   check('21 修为丹按 效率 × EP(当前rank) 生效', expAfterPill > expBefore, `修为 ${expBefore.toFixed(0)} → ${expAfterPill.toFixed(0)}｜${head(r20b)}`)
   const r20c = await send(c1, '.服用 聚气丹')
-  check('22 同类冷却生效', r20c.includes('冷却'), head(r20c))
+  check('22 同种丹冷却生效', r20c.includes('冷却'), head(r20c))
 
   // ── 23. 功法与升阶 ─────────────────────────────────────────────────
   await db.upsert('xianxia_tech', [{ userId: 'u1', techId: 'T01', tier: 'L', obtainedAt: new Date() }], ['userId', 'techId'])
@@ -244,8 +244,8 @@ async function main () {
     '.图鉴', '.成就', '.任务链', '.链进度', '.签到']
   // 混排界面：正文含剧情/题库文本（那是内容，不是我们写的说明），只查口径禁词
   const MIXED_CMDS = ['.答题', '.抽签']
-  const PURE_BAD = ['只能从', '——', '不是赌博', '不必守着', '记住了就是收获', '留到概率更低', '离线照常累计']
-  const MIXED_BAD = ['只能从', '不是赌博', '不必守着', '记住了就是收获', '留到概率更低']
+  const PURE_BAD = ['只能从', '——', '不是赌博', '不必守着', '记住了就是收获', '留到概率更低', '离线照常累计', '正反馈', '永远有意义', '跨版本']
+  const MIXED_BAD = ['只能从', '不是赌博', '不必守着', '记住了就是收获', '留到概率更低', '正反馈', '永远有意义']
   const hits: string[] = []
   // 半角尖括号会被 Koishi 当成消息元素解析，玩家看到的是一段被吞掉/错位的文本
   const angle: string[] = []

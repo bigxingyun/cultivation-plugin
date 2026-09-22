@@ -46,12 +46,14 @@ export function registerCore (ctx: Context, game: Game) {
     return cursor
   }
 
-  /** 原子扣掉一次历练次数；够则返回 true */
+  /** 原子扣历练次数；成功则同步内存中的 quotaUsed */
   async function spendQuota (user: XUser, quota: number, n: number): Promise<boolean> {
     const res = await database.set(T_USER, {
       userId: user.userId, quotaUsed: { $lte: quota - n },
     } as any, (row: any) => ({ quotaUsed: $.add(row.quotaUsed, n) }) as any)
-    return !!res.matched
+    if (!res.matched) return false
+    user.quotaUsed += n
+    return true
   }
 
   /** 生成一批候选：四个目的各一条（当前境界档位）+ 一条挑战 + 一条轻松 */
@@ -126,7 +128,8 @@ export function registerCore (ctx: Context, game: Game) {
         T.prose('修为在闭关中按时间戳累计，离线同样生效：'),
         T.list('　/闭关　进入闭关'),
         T.list('　/状态　查看境界与增速'),
-        T.list('　/历练　选择任务（菜单多选一）'),
+        T.list('　/历练　选择任务'),
+        T.list('　/帮助　指令清单'),
       ]
     }))
 
@@ -134,6 +137,18 @@ export function registerCore (ctx: Context, game: Game) {
   ctx.command('闭关', '进入闭关（时间戳累计修为）')
     .alias('静修')
     .action(shell(game, async (user) => {
+      if (user.seclusionStart) {
+        const stats = await game.stats(user)
+        const pool = C.EP(user.rank)
+        const left = Math.max(0, pool - user.exp)
+        const hung = (Date.now() - new Date(user.seclusionStart).getTime()) / 1000
+        return [
+          T.title('已在闭关中'),
+          T.kv('已挂', dur(hung)),
+          T.kv('增速', `${stats.speed.toFixed(2)} /秒`),
+          T.kv('本层还需', dur(left / stats.speed)),
+        ]
+      }
       await game.save(user.userId, { seclusionStart: new Date(), seclusionLast: null })
       const stats = await game.stats(user)
       const pool = C.EP(user.rank)
@@ -336,7 +351,7 @@ export function registerCore (ctx: Context, game: Game) {
           lines.push(T.list(`${CIRCLED[i]} ${PURPOSE_LABEL[purpose]} · ${GRADE_NAMES[grade - 1]}档　${c.name}　完成于 ${dur((c.finish - Date.now()) / 1000)}后`))
         })
         lines.push(T.kv('预计成功率', pct(rate)))
-        lines.push(T.kv('今日次数', `${user.quotaUsed + created.length} / ${quota}`))
+        lines.push(T.kv('今日次数', `${user.quotaUsed} / ${quota}`))
         return lines
       }
 

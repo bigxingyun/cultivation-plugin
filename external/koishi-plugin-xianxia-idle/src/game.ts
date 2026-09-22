@@ -135,7 +135,7 @@ export function extendModels (ctx: Context) {
     finishAt: 'timestamp',
   }, { primary: ['userId', 'seq'] })
 
-  // 已结算日志：**只存 id + 成败**，正文由静态数据还原（绝不把故事写进库）
+  // 已结算日志：只存 id + 成败，正文由静态数据还原
   ctx.model.extend(T_LOG, {
     id: { type: 'unsigned' },
     userId: 'string',
@@ -274,7 +274,7 @@ export class Game {
     await this.ctx.database.set(T_USER, { userId }, patch as any)
   }
 
-  // ── 每日重置：按服务器日期比较（**绝不能按"距上次 24 小时"**） ──────
+  // ── 每日重置：按服务器日历日比较 ───────────────────────────────────
   async resetDaily (user: XUser): Promise<boolean> {
     const day = C.today()
     if (user.quotaResetDate === day) return false
@@ -424,7 +424,7 @@ export class Game {
     return { mission, success, exp, material, pills, technique }
   }
 
-  /** 学习/顶掉功法：同一时刻只有 1 门（红线），但保留收集记录 */
+  /** 学习功法：同时仅运转一门，收集记录保留 */
   async learnTechnique (user: XUser, tech: TechniqueDef, tier: Tier): Promise<{ replaced: boolean }> {
     const had = !!user.techId
     await this.save(user.userId, { techId: tech.id, techTier: tier, techUpgradedAt: null })
@@ -617,7 +617,7 @@ export class Game {
     return rows[0]?.count ?? 0
   }
 
-  /** 原子扣减物品：不足则返回 false（绝不先读后写） */
+  /** 原子扣减物品：不足返回 false */
   async consumeItem (userId: string, itemId: string, n: number): Promise<boolean> {
     const res = await this.ctx.database.set(T_ITEM, { userId, itemId, count: { $gte: n } } as any, (row) => ({
       count: $.add(row.count, -n),

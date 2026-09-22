@@ -45,7 +45,7 @@ export function registerDaily (ctx: Context, game: Game) {
       if (user.lastCheckinDate === yesterday()) {
         streak = (user.checkinStreak % 7) + 1
       } else {
-        streak = Math.max(1, user.checkinStreak - 1) // 回退 2 格后再算今天 +1
+        streak = Math.max(1, user.checkinStreak - 1) // 断签回退 2 格后再计本日（= streak-1）
       }
       await g.save(user.userId, { checkinStreak: streak, lastCheckinDate: day })
       user.checkinStreak = streak
@@ -197,12 +197,16 @@ export function registerDaily (ctx: Context, game: Game) {
       if (user.fragments < C.INSIGHT_FRAG_COST) {
         return `【碎片不足】需要 ${C.INSIGHT_FRAG_COST} 枚　现有 ${user.fragments} 枚`
       }
-      await database.set(T_USER, { userId: user.userId }, (row: any) => ({ fragments: $.add(row.fragments, -C.INSIGHT_FRAG_COST) }) as any)
+      const res = await database.set(T_USER, {
+        userId: user.userId, fragments: { $gte: C.INSIGHT_FRAG_COST },
+      } as any, (row: any) => ({ fragments: $.add(row.fragments, -C.INSIGHT_FRAG_COST) }) as any)
+      if (!res.matched) return `【碎片不足】需要 ${C.INSIGHT_FRAG_COST} 枚`
+      user.fragments -= C.INSIGHT_FRAG_COST
       const realm = C.realmOf(user.rank) as Realm
       const locked = D.CHAINS.filter((c) => c.realm >= realm && !(c.unlock.rankMin <= user.rank))
       const pool = D.badlotsOfRealm(realm)
       const bad = g.pick(pool)
-      const lines: Line[] = [T.title(`天机推演 · 碎片 -${C.INSIGHT_FRAG_COST}　剩 ${user.fragments - C.INSIGHT_FRAG_COST}`)]
+      const lines: Line[] = [T.title(`天机推演 · 碎片 -${C.INSIGHT_FRAG_COST}　剩 ${user.fragments}`)]
       if (locked.length && Math.random() < 0.5) {
         const chain = g.pick(locked)!
         lines.push(T.prose(`『${chain.blurb}』`))
