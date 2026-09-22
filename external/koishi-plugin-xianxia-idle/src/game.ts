@@ -1,10 +1,4 @@
-/** 修仙挂机 · ctx 绑定层
- *
- *  这里集中三件事，别处不许再碰：
- *   ① 数据模型（必须在使用前完成扩展）
- *   ② 惰性结算（闭关修为 / 历练队列 / 链节点 / 每日重置）——**绝不使用定时器**
- *   ③ 数值聚合（功法 + 丹药 + buff → 属性与增速）
- */
+/** 游戏服务层：模型扩展、惰性结算、数值聚合。 */
 
 import { Context, $, Logger } from 'koishi'
 import type {
@@ -732,7 +726,7 @@ export class Game {
     return arr.length ? arr[arr.length - 1][0] : undefined
   }
 
-  /** 待办摘要的原始条目（§4.6：零主动推送的落地机制） */
+  /** 待办摘要条目（§4.6） */
   async todos (user: XUser): Promise<string[]> {
     const out: string[] = []
     if (user.rank < 81 && user.exp >= C.EP(user.rank)) {

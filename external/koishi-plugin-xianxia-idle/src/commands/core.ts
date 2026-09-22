@@ -123,15 +123,15 @@ export function registerCore (ctx: Context, game: Game) {
         T.prose('你是青云宗扫东院的杂役。你没有名字，没有功法，也不配参加问道试。'),
         T.prose('但你捡到了一块不该出现的玉简。'),
         T.blank(),
-        T.prose('修为会自己往前走，不必守着——关掉手机也在涨：'),
-        T.list('　/闭关　开始挂机（离线照常累计）'),
-        T.list('　/状态　看看自己'),
-        T.list('　/历练　出门做事，攒功法和丹药（会给一份菜单）'),
+        T.prose('修为在闭关中按时间戳累计，离线同样生效：'),
+        T.list('　/闭关　进入闭关'),
+        T.list('　/状态　查看境界与增速'),
+        T.list('　/历练　选择任务（菜单多选一）'),
       ]
     }))
 
   // ── A2 闭关 ─────────────────────────────────────────────────────────
-  ctx.command('闭关', '开始挂机（离线照常累计）')
+  ctx.command('闭关', '进入闭关（时间戳累计修为）')
     .alias('静修')
     .action(shell(game, async (user) => {
       await game.save(user.userId, { seclusionStart: new Date(), seclusionLast: null })
@@ -406,9 +406,7 @@ export function registerCore (ctx: Context, game: Game) {
     .action(shell(game, async (user, g, argv, args) => {
       const seq = Math.floor(Number(args[0]))
       // 漏参数时必须自己拦：`Number(undefined)` 是 NaN，直接丢给 sqlite 会抛异常，
-      // 玩家只看到一句「发生未知错误」。(踩过的坑)
-      // 措辞里**不能出现 `<序号>`**：Koishi 会把 send 出去的字符串当消息元素解析，
-      // `<序号>` 会变成一个真实的未知元素，把后面整段吞进去。(踩过的坑)
+      // 回复文案禁用半角尖括号；指令参数声明中的 <> 除外
       if (!Number.isInteger(seq)) return '【用法】放弃 序号　序号见「任务」'
       const rows = await database.get(T_QUEUE, { userId: user.userId, seq }, { limit: 1 })
       if (!rows.length) return `【没有这个任务】队列里没有第 ${seq} 个。`

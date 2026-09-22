@@ -13,6 +13,7 @@ import type { Line } from '../core/render'
 import { T } from '../core/render'
 import type { Grade, Realm } from '../types'
 import { CLASS_NAMES } from '../types'
+import { pickBySeed } from '../core/deterministic'
 import { shell } from './helpers'
 
 /** 出题档位：按大境界分 5 档（§9.3 只出玩家经历过的内容） */
@@ -23,16 +24,6 @@ export function quizBand (rank: number): 1 | 2 | 3 | 4 | 5 {
   if (r <= 4) return 3
   if (r <= 6) return 4
   return 5
-}
-
-/** 按日期确定性抽取（**绝不用 Math.random()**，否则刷新换题） */
-function pickByDate<T> (arr: T[], seed: string): T {
-  let h = 2166136261
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return arr[Math.abs(h) % arr.length]
 }
 
 function yesterday (): string {
@@ -134,7 +125,7 @@ export function registerDaily (ctx: Context, game: Game) {
       const band = quizBand(user.rank)
       const pool = D.quizOfBand(band)
       if (!pool.length) return '【题库为空】'
-      const q = pickByDate(pool, `${day}|${user.userId}`)
+      const q = pickBySeed(pool, `${day}|${user.userId}`)
       const pick = String(args[0] ?? '').toUpperCase().replace(/[^ABC]/g, '')
       if (!pick) {
         if (user.quizDate === day && user.quizAnswered) {

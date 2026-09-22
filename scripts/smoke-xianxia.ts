@@ -218,7 +218,7 @@ async function main () {
   const r33b = await send(c1, '.成就')
   check('34 成就按条件实时计算', r33b.includes('成就'), head(r33b, 2))
 
-  // ── 35. 待办摘要（零主动推送） ─────────────────────────────────────
+  // ── 35. 待办摘要 ───────────────────────────────────────────────────
   await db.set('xianxia_user', { userId: 'u1' }, { lastCheckinDate: '', exp: C.EP(u23.rank) * 3 } as any)
   const r35 = await send(c1, '.状态')
   check('35 任意回复末尾附待办摘要', /▸ 待办：/.test(r35), (r35.split('\n').find((l) => l.includes('待办')) || '').trim())
@@ -227,7 +227,7 @@ async function main () {
   const r36 = await send(c1, '.帮助')
   check('36 帮助卡包含全部指令', r36.includes('闭关') && r36.includes('任务链') && r36.includes('炼丹'), head(r36, 1))
   const r36b = await send(c1, '.介绍')
-  check('37 介绍说明"不用一直在线"', r36b.includes('不用一直在线'), head(r36b, 2))
+  check('37 介绍含离线结算说明', r36b.includes('离线结算'), head(r36b, 2))
 
   // ── 38. 权限 ───────────────────────────────────────────────────────
   const r38 = await send(c2, '.修仙管理 查询')
@@ -262,7 +262,7 @@ async function main () {
   check('40b 输出里没有半角尖括号（不会被当成消息元素）', angle.length === 0,
     angle.slice(0, 4).join('；') || '全部数据界面干净')
 
-  // ── 41. 两条渲染路径：只在排版上不同，数据必须一模一样 ────────────────
+  // ── 41. 双通道渲染指纹一致 ─────────────────────────────────────────
   const R = require('../external/koishi-plugin-xianxia-idle/src/core/render.ts')
   const { T } = R
   const body = [

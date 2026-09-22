@@ -7,12 +7,12 @@
  *   《任务故事库.md》           全部文本
  *   《功法丹药图鉴.md》         功法与丹药条目
  *
- * 实现纪律（踩过的坑，别改回去）：
- *   1. 数值一律由 core/curves.ts 现算，任何表都不许硬编码
- *   2. 一切计时都是时间戳惰性结算，**没有定时器**（重启/离线都不丢）
- *   3. dispose 里不做任何存档——每次变更立即写库
- *   4. 不在 dispose 里用 ctx.logger（服务可能已卸载，改用模块级 Logger）
- *   5. 数据模型必须在任何数据库操作之前 extend
+ * 实现约束：
+ *   1. 数值由 core/curves.ts 计算，禁止在业务层硬编码
+ *   2. 计时采用时间戳惰性结算，不使用定时器
+ *   3. 状态变更即时写库，不在 dispose 中批量存档
+ *   4. 日志使用模块级 Logger，dispose 中不调用 ctx.logger
+ *   5. extendModels 须先于一切 database 操作
  */
 
 import { Context, Schema, Logger } from 'koishi'
@@ -33,11 +33,11 @@ export const inject = ['database']
 const logger = new Logger('xianxia')
 
 export interface Config {
-  /** 是否在每条回复末尾附加待办摘要（零主动推送的实现） */
+  /** 是否在回复末尾附加待办摘要（被动平台下的状态提示） */
   todoHint: boolean
-  /** 单条回复的软上限行数，超出只提示（避免刷屏） */
+  /** 单条回复行数软上限 */
   quoteLimit: number
-  /** 输出渲染：纯文本 / Markdown 两条路，见 core/render.ts */
+  /** 输出渲染模式，见 core/render.ts */
   render: RenderConfig
 }
 

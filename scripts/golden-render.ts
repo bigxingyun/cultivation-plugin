@@ -1,16 +1,6 @@
 /**
- * 双渲染黄金快照
- *
- * 同一条操作流水，分别用「纯文本」与「Markdown」两种渲染各跑一遍，把**原样输出**落成文件。
- * 两种模式共用同一份内容源（core/render.ts），快照同时是：
- *   1. 重构的回归网 —— 纯文本快照必须逐字不变
- *   2. 两套方案的对照样张 —— docs/输出/纯文本.txt vs docs/输出/markdown.txt
- *
- * 为了能 diff，必须可复现：时钟冻结 + Math.random 换成定种 PRNG。
- *
- * 运行：
- *   node -r esbuild-register scripts/golden-render.ts           # 生成
- *   node -r esbuild-register scripts/golden-render.ts --check   # 与已提交快照逐字对比
+ * 渲染回归快照：同一操作序列分别以 text / markdown 模式执行，输出写入 docs/输出/。
+ * 可复现条件：固定时钟 + 定种 PRNG。--check 与仓库快照逐字比对并校验 fingerprint。
  */
 
 import { Context } from 'koishi'
