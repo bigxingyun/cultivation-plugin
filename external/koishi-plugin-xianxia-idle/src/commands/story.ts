@@ -12,7 +12,7 @@ import type { Line } from '../core/render'
 import { T } from '../core/render'
 import type { ChainDef, Realm } from '../types'
 import { CLASS_NAMES, TIER_NAMES } from '../types'
-import { closedMsg, shell } from './helpers'
+import { closedMsg, parentMenu, shell, withImage } from './helpers'
 
 /** 链的四态（§3.4）：未解锁的对玩家只显示链名 + 模糊描述 + 量化条件 */
 async function chainState (game: Game, user: XUser, chain: ChainDef) {
@@ -35,9 +35,20 @@ async function chainState (game: Game, user: XUser, chain: ChainDef) {
 export function registerStory (ctx: Context, game: Game) {
   const { database } = ctx
 
+  ctx.command('故事', '任务链 · 图鉴 · 成就')
+    .action(parentMenu(game, '故事', [
+      ['任务链', '全部篇章进度'],
+      ['接链', '接一个已解锁的篇章'],
+      ['链进度', '看节点、倒计时、领文本'],
+      ['看故事', '回看已读完的节'],
+      ['放弃链', '中途放下（已完成的不回退）'],
+      ['图鉴', '收集进度'],
+      ['成就', '长期目标'],
+    ]))
+
   // ── E1 任务链 ───────────────────────────────────────────────────────
-  ctx.command('任务链', '看全部篇章的进度')
-    .alias('故事').alias('篇章')
+  ctx.command('故事/任务链', '看全部篇章的进度')
+    .alias('任务链').alias('篇章')
     .action(shell(game, async (user, g) => {
       const lines: Line[] = [T.title('篇章')]
       let done = 0
@@ -63,8 +74,8 @@ export function registerStory (ctx: Context, game: Game) {
     }))
 
   // ── E2 接链 ─────────────────────────────────────────────────────────
-  ctx.command('接链 <链名>', '接取一个已解锁的篇章')
-    .alias('接故事')
+  ctx.command('故事/接链 <链名>', '接取一个已解锁的篇章')
+    .alias('接链').alias('接故事')
     .action(shell(game, async (user, g, argv, args) => {
       const blocked = closedMsg(user)
       if (blocked) return blocked
@@ -92,17 +103,19 @@ export function registerStory (ctx: Context, game: Game) {
         T.div(),
         T.kv(`节点 1 / ${C.CHAIN_NODES}`, `${first ? first.name : ''}　需 ${Math.ceil(C.chainNodeDuration(chain.realm) / 3600)} 小时`),
       ]
-      return lines
-    }))
+      return withImage(lines)
+    }, { image: true }))
 
   // ── E3 链进度 ───────────────────────────────────────────────────────
-  ctx.command('链进度', '看当前节点、倒计时，并领取已完成的节点文本')
+  ctx.command('故事/链进度', '看当前节点、倒计时，并领取已完成的节点文本')
+    .alias('链进度')
     .action(shell(game, async (user, g) => {
       const rows = await database.get(T_CHAIN, { userId: user.userId })
       const active = rows.filter((r) => r.state === 'active')
       const completed = rows.filter((r) => r.state === 'completed')
       if (!rows.length) return '【还没接过任何篇章】'
       const lines: Line[] = []
+      let hadStory = false
       for (const row of active) {
         const chain = D.CHAIN_BY_ID.get(row.chainId)
         if (!chain) continue
@@ -110,6 +123,7 @@ export function registerStory (ctx: Context, game: Game) {
         for (let seq = row.readSeq + 1; seq <= Math.max(0, row.nodeSeq - 1); seq++) {
           const node = chain.nodes[seq - 1]
           if (!node) continue
+          hadStory = true
           lines.push(T.title(`${chain.name} · 节点 ${seq} ｜ ${node.name}`))
           lines.push(T.prose(node.story.success))
           if (node.story.hook) lines.push(T.prose(`　${node.story.hook}`))
@@ -132,12 +146,13 @@ export function registerStory (ctx: Context, game: Game) {
           await database.set(T_CHAIN, { userId: user.userId, chainId: row.chainId }, { readSeq: C.CHAIN_NODES } as any)
         }
       }
-      return lines.length ? lines : '【没有进行中的篇章】'
+      if (!lines.length) return '【没有进行中的篇章】'
+      return hadStory ? withImage(lines) : lines
     }))
 
   // ── E4 看故事 ───────────────────────────────────────────────────────
-  ctx.command('看故事 <链名> [节点:number]', '回看已完成的篇章节点')
-    .alias('回看')
+  ctx.command('故事/看故事 <链名> [节点:number]', '回看已完成的篇章节点')
+    .alias('看故事').alias('回看')
     .action(shell(game, async (user, g, argv, args) => {
       const key = String(args[0] ?? '')
       const chain = D.CHAINS.find((c) => c.name === key) ?? D.CHAINS.find((c) => c.id === key)
@@ -169,7 +184,8 @@ export function registerStory (ctx: Context, game: Game) {
     }))
 
   // ── E5 放弃链 ───────────────────────────────────────────────────────
-  ctx.command('放弃链 <链名>', '中途放弃一个篇章（已完成的节点不回退）')
+  ctx.command('故事/放弃链 <链名>', '中途放弃一个篇章（已完成的节点不回退）')
+    .alias('放弃链')
     .action(shell(game, async (user, g, argv, args) => {
       const blocked = closedMsg(user)
       if (blocked) return blocked
@@ -186,8 +202,8 @@ export function registerStory (ctx: Context, game: Game) {
     }))
 
   // ── E6 图鉴 ─────────────────────────────────────────────────────────
-  ctx.command('图鉴 [类别]', '收集进度')
-    .alias('收集')
+  ctx.command('故事/图鉴 [类别]', '收集进度')
+    .alias('图鉴').alias('收集')
     .action(shell(game, async (user, g, argv, args) => {
       const kind = String(args[0] ?? '')
       const ownedTech = await database.get('xianxia_tech', { userId: user.userId })
@@ -230,7 +246,8 @@ export function registerStory (ctx: Context, game: Game) {
     }))
 
   // ── E7 成就 ─────────────────────────────────────────────────────────
-  ctx.command('成就', '成就与长期目标')
+  ctx.command('故事/成就', '成就与长期目标')
+    .alias('成就')
     .action(shell(game, async (user, g) => {
       const realm = C.realmOf(user.rank)
       const ownedTech = await database.get('xianxia_tech', { userId: user.userId })

@@ -2,15 +2,64 @@ prefix:
   - .
   - /
 plugins:
-  proxy-agent:iksjen: {}
-  http:uv5p14: {}
-  server:mwxif8:
-    port: 5140
-  logger:syo61k:
-    level: 2
-  database-sqlite:n3zrwo:
-    path: data/koishi.db
-  console:zin3jk: {}
-  sandbox:nrz06r: {}
-  demo:u7g9gm: {}
-  xianxia-idle:643rqf: {}
+  group:server:
+    server:x2x54w:
+      port: 5140
+      maxPort: 5149
+  group:basic:
+    admin:dfm9j4: {}
+    bind:435pfs: {}
+    commands:q7dt5x: {}
+    help:646pd1: {}
+    http:y1gar8: {}
+    inspect:ndjk7g: {}
+    locales:0o2t24: {}
+    proxy-agent:zaevo1: {}
+    rate-limit:0x9h7s: {}
+  group:console:
+    actions:5zwnyr: {}
+    analytics:25kl0l: {}
+    ~auth:w9qlp3: {}
+    config:qfymdk: {}
+    console:xg6xcd:
+      open: true
+    dataview:kt9kdl: {}
+    explorer:tzebpz: {}
+    logger:8fngr3: {}
+    insight:ftktox: {}
+    market:rnenq6:
+      search:
+        endpoint: https://koishi-registry.yumetsuki.moe/index.json
+        timeout: 60000
+      registry:
+        endpoint: https://registry.npmmirror.com
+    notifier:3w8ixb: {}
+    oobe:m1fp1g: {}
+    sandbox:iz1ofh: {}
+    status:9ksya7: {}
+    theme-vanilla:5wloy8: {}
+  group:storage:
+    database-sqlite:tem7cv:
+      path: data/koishi.db
+    assets-local:tc0vnh: {}
+  group:adapter:
+    adapter-qq:xpnlyf:
+      id: '102253522'
+      secret: Ydjqx5DMVfp0CObo2GVk0HYq8Rk4Pk6S
+      type: public
+      protocol: websocket
+      sandbox: false
+      intents:
+        - USER_MESSAGE
+        - MESSAGE_AUDIT
+        - GUILDS
+        - GUILD_MEMBERS
+        - PUBLIC_GUILD_MESSAGES
+        - DIRECT_MESSAGES
+        - INTERACTIONS
+  group:game:
+    xianxia-idle:5p8c83:
+      todoHint: true
+      render: auto
+      images: true
+    demo:gk9xax: {}

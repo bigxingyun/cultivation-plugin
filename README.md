@@ -37,8 +37,8 @@ Koishi 4.18 上的中文修仙挂机插件。核心机制为**时间戳惰性结
 ## 快速开始
 
 ```sh
-git clone git@github.com:bigxingyun/cultivation-plugin.git
-cd cultivation-plugin
+git clone git@github.com:bigxingyun/koishi-plugin-cultivation.git
+cd koishi-plugin-cultivation
 npm install
 npm run dev
 ```

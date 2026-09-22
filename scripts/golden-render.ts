@@ -51,7 +51,7 @@ async function run (mode: Mode): Promise<{ text: string; pairs: Array<{ cmd: str
   const sqliteMod: any = require('@koishijs/plugin-database-sqlite')
   app.plugin(sqliteMod?.default?.default ?? sqliteMod?.default ?? sqliteMod, { path: `data/golden-${mode}.db` })
   const mod: any = require('../external/koishi-plugin-xianxia-idle/src/index.ts')
-  app.plugin(mod?.default?.default ?? mod?.default ?? mod, { render: mode, todoHint: true })
+  app.plugin(mod?.default?.default ?? mod?.default ?? mod, { render: mode, todoHint: true, images: false })
   await app.start()
   await new Promise((r) => setTimeout(r, 300))
 

@@ -15,68 +15,73 @@ import { emit, shell } from './helpers'
 
 const HELP_CARD: Line[] = [
   T.title('修仙 · 指令'),
+  T.prose('不知道做什么？日常大致是：出关 → 收任务 / 签到抽签 → 排历练或突破 → 再闭关。'),
+  T.prose('一级入口：修炼 · 历练 · 每日 · 成长 · 故事。短指令也能直达（如「闭关」）。'),
   T.sec('修炼'),
-  T.list('　/闭关　　进入闭关（按时间戳累计修为）'),
-  T.list('　/出关　　结束闭关，之后可执行写操作'),
-  T.list('　/状态　　境界 · 修为 · 属性 · 加成'),
-  T.list('　/突破　　消耗满池修为，按概率升境'),
+  T.list('　/闭关　坐下涨修为　　/出关　起来办事'),
+  T.list('　/状态　看自己　　/突破　池满再试'),
   T.sec('历练'),
-  T.list('　/历练　　　　　　　列出候选任务'),
-  T.list('　/历练 3　　　　　　排队第 3 个'),
-  T.list('　/历练 换　　　　　 刷新候选'),
-  T.list('　/历练 打怪 凡 3　　按目的·档位批量排队'),
-  T.list('　/任务　　查看队列　　/任务 收　　读取已结算日志'),
+  T.list('　/历练　　看候选；上方是已接队列'),
+  T.list('　/历练 3　选第 3 个　　/历练 换　换一批'),
+  T.list('　/任务　　看队列　　/任务 收　读结算'),
+  T.list('　/放弃 〈序号〉　撤销还没开始的'),
   T.sec('每日'),
-  T.list('　/签到　连签 7 天一轮，断签回退 2 格'),
-  T.list('　/抽签　每日一次'),
-  T.list('　/答题　答对给奖，答错无罚'),
-  T.list('　/奇遇　待决事件二选一　　/天机　3 碎片换提示'),
+  T.list('　/签到　/抽签　/答题　/奇遇　/天机'),
   T.sec('成长'),
-  T.list('　/丹药　/服用 聚气丹　/功法　/升阶'),
-  T.list('　/炼丹　/喂丹　/丹炉'),
+  T.list('　/丹药　/服用　/功法　/升阶　/炼丹　/喂丹　/丹炉'),
   T.sec('故事'),
-  T.list('　/任务链　/接链 青云旧籍　/链进度　/看故事 青云旧籍'),
-  T.list('　/图鉴　/成就'),
+  T.list('　/任务链　/接链　/链进度　/看故事　/图鉴　/成就'),
   T.sec('其他'),
-  T.list('　/介绍　/待办　/修仙'),
+  T.list('　/修仙　/介绍　/待办　/帮助 〈指令名〉'),
 ]
 
 const INTRO: Line[] = [
   T.title('介绍 · 玩法概览'),
   T.blank(),
-  T.head('一、核心循环'),
-  T.prose('　闭关积累修为 → 经验池满 → 突破升境。'),
-  T.prose('　历练获取功法与丹药，提升属性与任务成功率。'),
-  T.prose('　任务链按节点计时推进，不消耗历练次数、不掷骰。'),
+  T.head('一、你在做什么'),
+  T.prose('　闭关涨修为，池满了就突破升境。'),
+  T.prose('　历练出门拿功法与丹药，让下次历练更稳、闭关更快。'),
+  T.prose('　篇章按时间一节节推进，不耗历练次数，也不掷骰。'),
   T.blank(),
   T.head('二、离线结算'),
-  T.prose('　闭关、历练队列、链节点均按时间戳惰性结算。'),
-  T.prose('　离线收益照常累计，无离线上限。'),
-  T.prose('　日流程参考：出关 → 收任务 / 排历练 / 突破 → 闭关。'),
+  T.prose('　闭关、历练队列、篇章节点都会按时间推进。'),
+  T.prose('　人离开也照样走表，没有离线上限。'),
+  T.prose('　回来时建议：出关 → 收任务 / 排历练 / 突破 → 再闭关。'),
   T.blank(),
-  T.head('三、资源'),
-  T.prose('　功法与丹药来自历练：打怪（灵材·稀有丹）、药田（丹药）、'),
-  T.prose('　修习（功法）、复合（综合奖励）。'),
-  T.prose('　灵材用于炼丹或功法升阶。'),
+  T.head('三、东西从哪来'),
+  T.prose('　打怪偏灵材与稀有丹，药田偏丹药，修习偏功法，复合最杂。'),
+  T.prose('　灵材用来炼丹，或把功法往上推一阶。'),
   T.blank(),
-  T.head('四、进度参考'),
-  T.prose('　纯闭关满级约 857 小时（约 36 天）；计入突破失败约 58 天。'),
-  T.prose('　功法与丹药满配可缩短周期。'),
+  T.head('四、大概要多久'),
+  T.prose('　纯闭关走到满级大约 36 天；算上突破失手，大约 58 天。'),
+  T.prose('　功法与丹药配齐，会短不少。'),
   T.blank(),
-  T.head('五、规则边界'),
-  T.prose('　无血量与装备；增益仅来自功法与丹药。'),
-  T.prose('　同时仅运转一门功法；突破失败退回该层 70% 修为，不损属性与功法。'),
+  T.head('五、边界'),
+  T.prose('　没有血条和装备；变强只靠功法与丹药。'),
+  T.prose('　同时只转一门功法。突破失败退回该层七成修为，不伤属性。'),
 ]
 
 export function registerInfo (ctx: Context, game: Game) {
   const { database } = ctx
 
   ctx.command('帮助 [指令名]', '看指令清单')
-    .alias('菜单').alias('help')
+    .alias('菜单')
     .action(shell(game, async (user, g, argv, args) => {
       const key = String(args[0] ?? '')
       if (key && key !== '指令') {
         const table: Record<string, Line[]> = {
+          修炼: [
+            T.list('/修炼　看子指令　　亦可直发：闭关 / 出关 / 状态 / 突破'),
+          ],
+          每日: [
+            T.list('/每日　看子指令　　亦可直发：签到 / 抽签 / 答题 / 奇遇 / 天机'),
+          ],
+          成长: [
+            T.list('/成长　看子指令　　亦可直发：丹药 / 服用 / 功法 / 升阶 / 炼丹 / 喂丹 / 丹炉'),
+          ],
+          故事: [
+            T.list('/故事　看子指令　　亦可直发：任务链 / 接链 / 链进度 / 看故事 / 图鉴 / 成就'),
+          ],
           闭关: [
             T.list('/闭关　进入闭关，修为按时间戳累计。'),
             T.list('闭关中仅允许查询与每日指令；写操作需先「出关」。重复闭关不会重置已挂时长。'),
@@ -94,22 +99,22 @@ export function registerInfo (ctx: Context, game: Game) {
             T.list('失败退回该层 70%；连败 3 次后下次成功率 +15pt。'),
           ],
           历练: [
-            T.list('/历练　　列出候选（目的、档位、耗时、成功率、修为）。'),
-            T.list('/历练 〈编号〉　排队菜单中对应条目。'),
-            T.list('/历练 换　　刷新候选，不消耗次数。'),
+            T.list('/历练　　列出候选（目的、档位、耗时、成功率、修为）；上方显示已接队列。'),
+            T.list('/历练 〈编号〉　排队菜单中对应条目；同一条今日不能接第二次。'),
+            T.list('/历练 换　　刷新候选（已接条目仍不出现）。'),
             T.list('/历练 〈目的〉 〈档位〉 [数量]　批量排队。目的：打怪 / 药田 / 修习 / 复合；档位：凡–帝或 1–7。'),
             T.kv('掉落', '打怪 灵材·稀有丹｜药田 丹药｜修习 功法｜复合 综合·线索'),
           ],
           任务: [
             T.list('/任务　查看队列　　/任务 收　读取未读结算日志'),
-            T.list('到点任务在任意交互时已结算入库；「收」只读日志。'),
+            T.list('到点任务在任意交互时已结算入库；「收」只读日志。接了什么也可在「历练」上方查看。'),
           ],
           签到: [T.list('/签到　连签 7 天一轮，第 7 天大奖；断签不清零，回退 2 格。')],
           抽签: [T.list('/抽签　大吉/吉：增速 buff；小吉：今日首次历练必成；平：修为；凶：故事碎片。')],
           答题: [T.list('/答题　出题　　/答题 A|B|C　作答。答对给修为与丹药。')],
           奇遇: [
             T.list('/奇遇　查看待决事件　　/奇遇 1|2　选择'),
-            T.list('选项分为即时资源与稳定进度两类。'),
+            T.list('选项分为「眼下能拿」与「细水长流」两类。'),
           ],
           丹药: [
             T.list('/丹药　背包　　/服用 〈丹药〉 [数量]'),
@@ -198,7 +203,7 @@ export function registerInfo (ctx: Context, game: Game) {
           out.push('修为已清零')
           break
         case '重置每日':
-          await g.save(userId, { quotaUsed: 0, quotaBonus: 0, quotaResetDate: '', lastCheckinDate: '', drawDate: '', quizDate: '', quizAnswered: '' })
+          await g.save(userId, { quotaUsed: 0, quotaBonus: 0, quotaResetDate: '', lastCheckinDate: '', drawDate: '', quizDate: '', quizAnswered: '', recentMissions: '', pendingMenu: '' })
           out.push('每日状态已重置')
           break
         case '重置链':
@@ -211,13 +216,13 @@ export function registerInfo (ctx: Context, game: Game) {
           out.push('队列与日志已清空')
           break
         default:
-          return emit(g, argv, [
+          return await emit(g, argv, [
             T.title('未知子命令', '可用：'),
             T.list('　查询 / 发灵材 / 发丹 / 改境界 / 重算 / 重置每日 / 重置链 / 清队列'),
           ])
       }
       ctx.logger('xianxia').info(`管理操作 by ${session.userId}: ${sub} ${userId} ${value}`)
-      return emit(g, argv, out)
+      return await emit(g, argv, out)
     })
 }
 

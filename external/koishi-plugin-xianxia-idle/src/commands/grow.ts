@@ -13,16 +13,27 @@ import type { Line } from '../core/render'
 import { T } from '../core/render'
 import type { Grade, Tier } from '../types'
 import { CLASS_NAMES, TIER_NAMES } from '../types'
-import { closedMsg, effectText, shell } from './helpers'
+import { closedMsg, effectText, parentMenu, shell } from './helpers'
 
 const CD_PREFIX = 'cd:'
 
 export function registerGrow (ctx: Context, game: Game) {
   const { database } = ctx
 
+  ctx.command('成长', '丹药 · 功法 · 炼丹 · 丹炉')
+    .action(parentMenu(game, '成长', [
+      ['丹药', '背包里的丹、材、碎片'],
+      ['服用', '吃一颗该吃的'],
+      ['功法', '当前心法与收集'],
+      ['升阶', '用灵材把功法往上推'],
+      ['炼丹', '三颗同品合成高一品'],
+      ['喂丹', '多余的丹投进丹炉'],
+      ['丹炉', '永久加成一览'],
+    ]))
+
   // ── D1 丹药 / 背包 ──────────────────────────────────────────────────
-  ctx.command('丹药', '看背包：丹药 · 灵材 · 故事碎片')
-    .alias('背包').alias('物品')
+  ctx.command('成长/丹药', '看背包：丹药 · 灵材 · 故事碎片')
+    .alias('丹药').alias('背包').alias('物品')
     .action(shell(game, async (user) => {
       const items = await game.items(user.userId)
       const lines: Line[] = [T.title(`丹药 · 灵材 ${num(user.material)} · 碎片 ${user.fragments}`)]
@@ -39,8 +50,8 @@ export function registerGrow (ctx: Context, game: Game) {
     }))
 
   // ── D2 服用 ─────────────────────────────────────────────────────────
-  ctx.command('服用 <丹药> [数量:number]', '使用丹药')
-    .alias('吃药')
+  ctx.command('成长/服用 <丹药> [数量:number]', '使用丹药')
+    .alias('服用').alias('吃药')
     .action(shell(game, async (user, g, argv, args) => {
       const blocked = closedMsg(user)
       if (blocked) return blocked
@@ -65,6 +76,7 @@ export function registerGrow (ctx: Context, game: Game) {
 
       const stats = await g.stats(user)
       const lines: Line[] = [T.title(`服用 · ${pill.name}（${C.gradeName(pill.grade)}品 · ${CLASS_NAMES[pill.cls]}）`)]
+      if (pill.lore) lines.push(T.prose(pill.lore))
 
       if (pill.cls === 'C') {
         // 突破丹：已满 95% 时**拒绝服用**，不让玩家白吃
@@ -118,8 +130,8 @@ export function registerGrow (ctx: Context, game: Game) {
     }))
 
   // ── D3 功法 ─────────────────────────────────────────────────────────
-  ctx.command('功法', '看当前功法与收集进度')
-    .alias('心法')
+  ctx.command('成长/功法', '看当前功法与收集进度')
+    .alias('功法').alias('心法')
     .action(shell(game, async (user) => {
       const tech = user.techId ? D.TECH_BY_ID.get(user.techId) : undefined
       const owned = await database.get(T_TECH, { userId: user.userId })
@@ -130,6 +142,7 @@ export function registerGrow (ctx: Context, game: Game) {
         lines.push(T.title(`功法 · ${tech.name} · ${TIER_NAMES[user.techTier]}`))
         lines.push(T.kv('品级', `${C.gradeName(tech.grade)}品　倾向　${tech.tendency}　倍率　×${tech.mTech}`))
         lines.push(T.kv('典出', tech.dex))
+        if (tech.image) lines.push(T.prose(tech.image))
         const fx = (tech.tiers[user.techTier] || []).map((e) => effectText(e.code, e.value))
         lines.push(T.kv('特效', fx.join('　')))
         const mat = user.techTier === 'U' ? 0 : C.upgradeMaterial(tech.grade as Grade, user.techTier === 'L' ? 'M' : 'U')
@@ -142,8 +155,8 @@ export function registerGrow (ctx: Context, game: Game) {
     }))
 
   // ── D4 升阶 ─────────────────────────────────────────────────────────
-  ctx.command('升阶', '用灵材与修为把当前功法推上一阶')
-    .alias('升品')
+  ctx.command('成长/升阶', '用灵材与修为把当前功法推上一阶')
+    .alias('升阶').alias('升品')
     .action(shell(game, async (user, g) => {
       const blocked = closedMsg(user)
       if (blocked) return blocked
@@ -188,8 +201,8 @@ export function registerGrow (ctx: Context, game: Game) {
     }))
 
   // ── D5 炼丹 ─────────────────────────────────────────────────────────
-  ctx.command('炼丹 <丹药> [次数:number]', '3 颗同品丹药 + 灵材 → 1 颗高一品丹药')
-    .alias('合丹')
+  ctx.command('成长/炼丹 <丹药> [次数:number]', '3 颗同品丹药 + 灵材 → 1 颗高一品丹药')
+    .alias('炼丹').alias('合丹')
     .action(shell(game, async (user, g, argv, args) => {
       const blocked = closedMsg(user)
       if (blocked) return blocked
@@ -225,8 +238,8 @@ export function registerGrow (ctx: Context, game: Game) {
     }))
 
   // ── D6 喂丹 ─────────────────────────────────────────────────────────
-  ctx.command('喂丹 <丹药> [数量:number]', '把多余的丹药喂给丹炉')
-    .alias('投炉')
+  ctx.command('成长/喂丹 <丹药> [数量:number]', '把多余的丹药喂给丹炉')
+    .alias('喂丹').alias('投炉')
     .action(shell(game, async (user, g, argv, args) => {
       const blocked = closedMsg(user)
       if (blocked) return blocked
@@ -251,7 +264,8 @@ export function registerGrow (ctx: Context, game: Game) {
     }))
 
   // ── D7 丹炉 ─────────────────────────────────────────────────────────
-  ctx.command('丹炉', '丹炉等级与永久加成')
+  ctx.command('成长/丹炉', '丹炉等级与永久加成')
+    .alias('丹炉')
     .action(shell(game, async (user) => {
       const level = C.furnaceLevel(user.alchemyExp)
       const fb = C.furnaceBonus(level)

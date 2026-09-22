@@ -245,6 +245,8 @@ export interface GameOptions {
   render?: RenderConfig
   /** 是否在回复末尾附待办摘要 */
   todoHint?: boolean
+  /** 高情绪节点是否附樱花 API 随机图 */
+  images?: boolean
 }
 
 export class Game {
@@ -256,6 +258,10 @@ export class Game {
 
   get todoHint (): boolean {
     return this.opts.todoHint !== false
+  }
+
+  get images (): boolean {
+    return this.opts.images !== false
   }
 
   // ── 用户档 ──────────────────────────────────────────────────────────
@@ -274,14 +280,22 @@ export class Game {
     await this.ctx.database.set(T_USER, { userId }, patch as any)
   }
 
-  // ── 每日重置：按服务器日历日比较 ───────────────────────────────────
+  /** 每日重置：按服务器日历日比较；顺带清空今日已接历练与菜单。 */
   async resetDaily (user: XUser): Promise<boolean> {
     const day = C.today()
     if (user.quotaResetDate === day) return false
-    await this.save(user.userId, { quotaUsed: 0, quotaBonus: 0, quotaResetDate: day })
+    await this.save(user.userId, {
+      quotaUsed: 0,
+      quotaBonus: 0,
+      quotaResetDate: day,
+      recentMissions: '',
+      pendingMenu: '',
+    })
     user.quotaUsed = 0
     user.quotaBonus = 0
     user.quotaResetDate = day
+    user.recentMissions = ''
+    user.pendingMenu = ''
     return true
   }
 
@@ -739,11 +753,11 @@ export class Game {
     const dueChain = chains.filter((c) => c.finishAt && new Date(c.finishAt).getTime() <= Date.now())
     if (dueChain.length) out.push(`${dueChain.length} 个链节点可看`)
     if (user.lastCheckinDate !== C.today()) out.push('今日未签到')
-    if (user.pendingEventId) out.push('有 1 条奇遇待选')
+    if (user.pendingEventId) out.push('有奇遇待选')
     const left = this.quotaOf(user) - user.quotaUsed
-    if (left > 0) out.push(`历练次数剩 ${left}`)
+    if (left > 0) out.push(`历练还剩 ${left} 次`)
     // 排最后：它是"该收工了"的提醒，不该挤掉上面那些"现在能做的事"
-    if (!user.seclusionStart && user.rank < 81) out.push('未闭关，修为不涨')
+    if (!user.seclusionStart && user.rank < 81) out.push('未闭关')
     return out
   }
 

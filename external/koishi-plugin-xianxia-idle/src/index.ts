@@ -39,6 +39,8 @@ export interface Config {
   quoteLimit: number
   /** 输出渲染模式，见 core/render.ts */
   render: RenderConfig
+  /** 高情绪节点附樱花 API 随机图（失败则仅发文字） */
+  images: boolean
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -49,13 +51,14 @@ export const Config: Schema<Config> = Schema.object({
     Schema.const('text').description('一律纯文本。任何平台都能读，Markdown 标记会原样显示。'),
     Schema.const('markdown').description('一律 Markdown。仅 QQ 官方机器人（群 / 单聊）渲染得出来。'),
   ]).default('auto').description('输出渲染方式。'),
+  images: Schema.boolean().default(true).description('开场、闭关、突破、抽签、奇遇、篇章等高情绪节点附随机插图（樱花 API）。'),
 })
 
 export function apply (ctx: Context, config: Config) {
   // 官方硬要求：模型扩展必须在使用前完成
   extendModels(ctx)
 
-  const game = new Game(ctx, { render: config.render, todoHint: config.todoHint })
+  const game = new Game(ctx, { render: config.render, todoHint: config.todoHint, images: config.images })
 
   registerCore(ctx, game)
   registerDaily(ctx, game)

@@ -32,7 +32,7 @@ async function main () {
 
   const mod: any = require('../external/koishi-plugin-xianxia-idle/src/index.ts')
   const plugin = mod?.default?.default ?? mod?.default ?? mod
-  app.plugin(plugin, {})
+  app.plugin(plugin, { images: false })
 
   await app.start()
   await new Promise((r) => setTimeout(r, 300))
@@ -102,16 +102,25 @@ async function main () {
   check('7c 「历练 1」排的就是菜单第 1 个（不是随机抽的）',
     q1.length === 1 && q1[0].missionId === menu[0],
     `排入 ${q1[0]?.missionId}｜菜单第 1 个 ${menu[0]}`)
+  const mName = (require('../external/koishi-plugin-xianxia-idle/src/data').MISSION_BY_ID.get(menu[0]) || {}).name || menu[0]
+  check('7c2 接取后历练界面能看见已接任务', /已接 · 队列/.test(r7b) && r7b.includes(mName), head(r7b, 4))
   const u7 = (await db.get('xianxia_user', { userId: 'u1' }))[0]
   check('7d 原子扣次数（1 次）', u7.quotaUsed === 1, `quotaUsed=${u7.quotaUsed}`)
   const r7c = await send(c1, '.历练 换')
-  const menu2 = ((await db.get('xianxia_user', { userId: 'u1' }))[0].pendingMenu || '').split(',')
+  const menu2 = ((await db.get('xianxia_user', { userId: 'u1' }))[0].pendingMenu || '').split(',').filter(Boolean)
   check('7e 「历练 换」换一批', menu2.length >= 4 && /发编号选择/.test(r7c), `新候选 ${menu2.length} 个`)
-  const r7d = await send(c1, '.历练 打怪 凡 2')
+  check('7e2 已接条目从今日菜单剔除', !menu2.includes(menu[0]), `已接 ${menu[0]}　新菜单 ${menu2.join(' ')}`)
+  await db.set('xianxia_user', { userId: 'u1' }, { pendingMenu: menu[0] } as any)
+  const r7block = await send(c1, '.历练 1')
+  check('7e3 同一条今日不能再接', /今天已经接过/.test(r7block) && (await db.get('xianxia_queue', { userId: 'u1' })).length === 1,
+    head(r7block, 2))
+  const r7d = await send(c1, '.历练 药田 凡 2')
   const q = await db.get('xianxia_queue', { userId: 'u1' })
   const u7b = (await db.get('xianxia_user', { userId: 'u1' }))[0]
   check('7f 批量快捷方式仍可用（再排 2 个）', q.length === 3 && u7b.quotaUsed === 3,
     `队列 ${q.length} 个，次数 ${u7b.quotaUsed} / 3｜${head(r7d)}`)
+  const takenIds = q.map((r) => r.missionId)
+  check('7f2 批量也不重复同一条', new Set(takenIds).size === takenIds.length, takenIds.join(' '))
 
   // 时间旅行：队列全部到点
   for (const row of q) await db.set('xianxia_queue', { userId: 'u1', seq: row.seq }, { finishAt: new Date(Date.now() - 1000) } as any)
@@ -155,7 +164,7 @@ async function main () {
   // ── 18. 奇遇二选一 ────────────────────────────────────────────────
   await db.set('xianxia_user', { userId: 'u1' }, { pendingEventId: 'E1-001' } as any)
   const r18 = await send(c1, '.奇遇')
-  check('18 奇遇展示二选一', r18.includes('即时资源') && r18.includes('稳定进度'), head(r18, 2))
+  check('18 奇遇展示二选一', r18.includes('眼下能拿') && r18.includes('细水长流'), head(r18, 2))
   const matBefore = (await db.get('xianxia_user', { userId: 'u1' }))[0].material
   const r18b = await send(c1, '.奇遇 1')
   const matAfter = (await db.get('xianxia_user', { userId: 'u1' }))[0].material
@@ -299,9 +308,9 @@ async function main () {
   // ── 43. 出口封装：Markdown 模式必须包成 <qq:markdown> 元素 ─────────────
   const { emit } = require('../external/koishi-plugin-xianxia-idle/src/commands/helpers.ts')
   const sample = [T.kv('修为', '1')]
-  const qqOut = emit({ renderConfig: 'auto' } as any, { session: { platform: 'qq' } }, sample)
-  const obOut = emit({ renderConfig: 'auto' } as any, { session: { platform: 'onebot' } }, sample)
-  const forceText = emit({ renderConfig: 'text' } as any, { session: { platform: 'qq' } }, sample)
+  const qqOut = await emit({ renderConfig: 'auto', images: false } as any, { session: { platform: 'qq' } }, sample)
+  const obOut = await emit({ renderConfig: 'auto', images: false } as any, { session: { platform: 'onebot' } }, sample)
+  const forceText = await emit({ renderConfig: 'text', images: false } as any, { session: { platform: 'qq' } }, sample)
   check('43 qq 平台包成 qq:markdown 元素，其它平台仍是字符串',
     qqOut?.type === 'qq:markdown' && String(qqOut).includes('<qq:markdown>')
     && typeof obOut === 'string' && obOut === '修为　1'

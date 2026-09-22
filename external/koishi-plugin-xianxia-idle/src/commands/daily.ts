@@ -14,7 +14,7 @@ import { T } from '../core/render'
 import type { Grade, Realm } from '../types'
 import { CLASS_NAMES } from '../types'
 import { pickBySeed } from '../core/deterministic'
-import { shell } from './helpers'
+import { shell, parentMenu, withImage } from './helpers'
 
 /** 出题档位：按大境界分 5 档（§9.3 只出玩家经历过的内容） */
 export function quizBand (rank: number): 1 | 2 | 3 | 4 | 5 {
@@ -33,9 +33,18 @@ function yesterday (): string {
 export function registerDaily (ctx: Context, game: Game) {
   const { database } = ctx
 
+  ctx.command('每日', '签到 · 抽签 · 答题 · 奇遇 · 天机')
+    .action(parentMenu(game, '每日', [
+      ['签到', '连签有奖，断签会退两格'],
+      ['抽签', '吉凶都算今日一课'],
+      ['答题', '答对有奖，答错不罚'],
+      ['奇遇', '路上撞见的二选一'],
+      ['天机', '三枚碎片换一条提示'],
+    ]))
+
   // ── C1 签到 ─────────────────────────────────────────────────────────
-  ctx.command('签到', '每日签到（连签 7 天为一轮，断签回退 2 格）')
-    .alias('打卡')
+  ctx.command('每日/签到', '每日签到（连签 7 天为一轮，断签回退 2 格）')
+    .alias('签到').alias('打卡')
     .action(shell(game, async (user, g) => {
       const day = C.today()
       if (user.lastCheckinDate === day) {
@@ -84,14 +93,24 @@ export function registerDaily (ctx: Context, game: Game) {
     }))
 
   // ── C2 抽签 ─────────────────────────────────────────────────────────
-  ctx.command('抽签', '每日一签（凶也有故事）')
-    .alias('求签')
+  ctx.command('每日/抽签', '每日一签（凶也有故事）')
+    .alias('抽签').alias('求签')
     .action(shell(game, async (user, g) => {
       const day = C.today()
-      if (user.drawDate === day) return '【今天已经抽过了】'
+      if (user.drawDate === day) return '【今天已经抽过了】明日再来。'
       await g.save(user.userId, { drawDate: day })
       const entry = g.pickWeighted(C.DRAW_TABLE.map((d) => [d, d.weight] as [typeof d, number]))!
-      const lines: Line[] = [T.title(`抽签 · ${entry.sign}`)]
+      const flavor: Record<string, string> = {
+        大吉: '签筒一震，红签落在掌心。',
+        吉: '签上墨色尚新，像刚写完。',
+        小吉: '签身微温，像刚被人握过。',
+        平: '不咸不淡的一签。日子还是日子。',
+        凶: '签面发暗。你还是把它读完了。',
+      }
+      const lines: Line[] = [
+        T.title(`抽签 · ${entry.sign}`),
+        T.prose(flavor[entry.sign] ?? '签已落定。'),
+      ]
       if (entry.sign === '大吉' || entry.sign === '吉') {
         const mul = entry.sign === '大吉' ? 1.5 : 1.25
         await g.addBuff(user.userId, 'speed', mul, 3600)
@@ -114,12 +133,12 @@ export function registerDaily (ctx: Context, game: Game) {
           lines.push(T.prose(bad.fragment))
         }
       }
-      return lines
-    }))
+      return withImage(lines)
+    }, { image: true }))
 
   // ── C3 答题 ─────────────────────────────────────────────────────────
-  ctx.command('答题 [选项]', '每日问答：答对给奖励，答错不罚')
-    .alias('问答')
+  ctx.command('每日/答题 [选项]', '每日问答：答对给奖励，答错不罚')
+    .alias('答题').alias('问答')
     .action(shell(game, async (user, g, argv, args) => {
       const day = C.today()
       const band = quizBand(user.rank)
@@ -164,8 +183,8 @@ export function registerDaily (ctx: Context, game: Game) {
     }))
 
   // ── C4 奇遇 ─────────────────────────────────────────────────────────
-  ctx.command('奇遇 [选择]', '被动事件：二选一')
-    .alias('抉择')
+  ctx.command('每日/奇遇 [选择]', '被动事件：二选一')
+    .alias('奇遇').alias('抉择')
     .action(shell(game, async (user, g, argv, args) => {
       const id = user.pendingEventId
       if (!id) return '【暂时没有奇遇】'
@@ -173,12 +192,12 @@ export function registerDaily (ctx: Context, game: Game) {
       if (!ev) { await g.save(user.userId, { pendingEventId: '' }); return '【这条奇遇的数据丢了】' }
       const pickRaw = String(args[0] ?? '')
       if (!pickRaw) {
-        return [
+        return withImage([
           T.title(`奇遇 · ${ev.title}`),
           T.prose(ev.body),
-          ...ev.options.map((o, i) => T.ord(i + 1, `${o.label}：${o.text}　${o.kind === 'res' ? '即时资源' : '稳定进度'}`)),
+          ...ev.options.map((o, i) => T.ord(i + 1, `${o.label}：${o.text}　${o.kind === 'res' ? '眼下能拿' : '细水长流'}`)),
           T.note('发「奇遇 1」或「奇遇 2」'),
-        ]
+        ])
       }
       const idx = Number(pickRaw) - 1
       if (idx !== 0 && idx !== 1) return '【选项不对】发「奇遇 1」或「奇遇 2」'
@@ -191,8 +210,8 @@ export function registerDaily (ctx: Context, game: Game) {
     }))
 
   // ── C5 天机推演 ─────────────────────────────────────────────────────
-  ctx.command('天机', '消耗 3 枚故事碎片，换一条提示')
-    .alias('推演')
+  ctx.command('每日/天机', '消耗 3 枚故事碎片，换一条提示')
+    .alias('天机').alias('推演')
     .action(shell(game, async (user, g) => {
       if (user.fragments < C.INSIGHT_FRAG_COST) {
         return `【碎片不足】需要 ${C.INSIGHT_FRAG_COST} 枚　现有 ${user.fragments} 枚`
